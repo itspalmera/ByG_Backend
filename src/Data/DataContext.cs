@@ -10,7 +10,7 @@ using Microsoft.EntityFrameworkCore;
 
 namespace ByG_Backend.src.Data
 {
-    public class DataContext(DbContextOptions<DataContext> dbContextOptions) : IdentityDbContext<Usuario>(dbContextOptions)
+    public class DataContext(DbContextOptions<DataContext> dbContextOptions) : IdentityDbContext<User>(dbContextOptions)
     {
         public DbSet<Quote> Quotes { get; set; } = null!;
         public DbSet<QuoteItem> QuoteItems { get; set; } = null!;
