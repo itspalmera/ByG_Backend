@@ -25,37 +25,60 @@ namespace ByG_Backend.src.Mappers
 
 
 
-            public static UserDto UserToUserDto(User user) =>
-            new()
-            {
-                FirstName = user.FirstName,
-                LastName = user.LastName,
-                Email = user.Email ?? string.Empty,
-                Registered = user.Registered,
-                IsActive = user.IsActive
-            };
+        public static UserDto UserToUserDto(User user) =>
+        new()
+        {
+            FirstName = user.FirstName,
+            LastName = user.LastName,
+            Email = user.Email ?? string.Empty,
+            IsActive = user.IsActive,
+            Role = user.Role,
+            Registered = user.Registered.ToString("dd/MM/yyyy"), 
+            LastAccess = user.LastAccess.HasValue 
+            ? user.LastAccess.Value.ToString("dd/MM/yyyy 'T' HH:mm:ss") 
+            : "Sin acceso"
+        };
 
 
 
-            public static NewUserDto UserToNewUserDto(User user) =>
-            new()
-            {
-                FirstName = user.FirstName,
-                LastName = user.LastName,
-                Email = user.Email ?? string.Empty
-            };
+        public static NewUserDto UserToNewUserDto(User user) =>
+        new()
+        {
+            FirstName = user.FirstName,
+            LastName = user.LastName,
+            Email = user.Email
+        };
 
-            public static AuthenticatedUserDto UserToAuthenticatedDto(User user, string token) =>
-            new()
-            {
-                FirstName = user.FirstName,
-                LastName = user.LastName,
-                Email = user.Email ?? string.Empty,
-                Phone = user.PhoneNumber ?? string.Empty,
-                Token = token,
-                IsActive = user.IsActive,
-                Registered = user.Registered
-            };
+
+
+        public static AuthenticatedUserDto UserToAuthenticatedDto(User user, string token) =>
+        new()
+        {
+            FirstName = user.FirstName,
+            LastName = user.LastName,
+            Email = user.Email ?? string.Empty,
+            Phone = user.PhoneNumber ?? string.Empty,
+            Token = token,
+            IsActive = user.IsActive,
+            Registered = user.Registered
+        };
+
+
+
+        public static void UpdateUserFromDto(User user, UpdateProfileDto dto)
+        {
+            if (!string.IsNullOrWhiteSpace(dto.FirstName))
+                user.FirstName = dto.FirstName.Trim();
+
+            if (!string.IsNullOrWhiteSpace(dto.LastName))
+                user.LastName = dto.LastName.Trim();
+
+            if (!string.IsNullOrWhiteSpace(dto.Email))
+                user.Email = dto.Email.Trim().ToLower();
+
+            if (!string.IsNullOrWhiteSpace(dto.Phone))
+                user.PhoneNumber = dto.Phone.Trim();
+        }
 
     }
 }

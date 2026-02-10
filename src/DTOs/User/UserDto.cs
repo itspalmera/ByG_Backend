@@ -13,7 +13,7 @@ namespace ByG_Backend.src.DTOs
         public string Email { get; set; } = string.Empty;
         public string Role { get; set; } = null!;
         public bool IsActive { get; set; } = true;
-        public DateOnly Registered { get; set; } = DateOnly.FromDateTime(DateTime.UtcNow);
-        public DateOnly? LastAccess { get; set; }
+        public string Registered { get; set; }
+        public string? LastAccess { get; set; }
     }
 }

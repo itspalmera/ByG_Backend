@@ -24,14 +24,18 @@ namespace ByG_Backend.src.Services
 
         }
 
-        public string GenerateToken(User user, string role)
+        public string GenerateToken(User user, List<string> roles)
         {
             var claims = new List<Claim>
             {
-               new Claim(ClaimTypes.NameIdentifier, user.Id),
-               new Claim(JwtRegisteredClaimNames.Email, user.Email!),
-               new Claim(ClaimTypes.Role, role),
+                new Claim(ClaimTypes.NameIdentifier, user.Id),
+                new Claim(JwtRegisteredClaimNames.Email, user.Email!),
             };
+            foreach (var role in roles)
+            {
+                claims.Add(new Claim(ClaimTypes.Role, role));
+            }
+            
             var creds = new SigningCredentials(_key, SecurityAlgorithms.HmacSha512Signature);
 
             var tokenDescriptor = new SecurityTokenDescriptor

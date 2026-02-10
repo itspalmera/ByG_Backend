@@ -16,7 +16,7 @@ namespace ByG_Backend.src.DTOs
 
 
         public DateOnly Registered { get; set; }
-        public DateOnly? LastAccess { get; set; }
+        public DateTime? LastAccess { get; set; }
         public bool IsActive { get; set; }
     }
 }

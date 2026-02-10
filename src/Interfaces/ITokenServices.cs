@@ -8,6 +8,6 @@ namespace ByG_Backend.src.Interfaces
 {
     public interface ITokenServices
     {
-        string GenerateToken(User user, string role);
+        string GenerateToken(User user, List<string> roles);
     }
 }

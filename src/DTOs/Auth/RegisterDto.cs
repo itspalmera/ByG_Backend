@@ -40,7 +40,7 @@ namespace ByG_Backend.src.DTOs
         public string Role { get; set; } = null!;
         public bool IsActive { get; set; } = true;
         public DateOnly CreatedAt { get; set; } = DateOnly.FromDateTime(DateTime.UtcNow);
-        public DateOnly? LastLoginAt { get; set; }
+        public DateTime? LastLoginAt { get; set; }
         
     }
 }

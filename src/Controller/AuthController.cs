@@ -18,18 +18,14 @@ namespace ByG_Backend.src.Controller
 {
     [ApiController]
     [Route("api/[controller]")]
-    public class AuthController(
-        ILogger<AuthController> logger,
-        UserManager<User> userManager,
-        ITokenServices tokenService
-    ) : ControllerBase
+    public class AuthController( ILogger<AuthController> logger, UserManager<User> userManager, ITokenServices tokenService) : ControllerBase
     {
         private readonly ILogger<AuthController> _logger = logger;
         private readonly UserManager<User> _userManager = userManager;
         private readonly ITokenServices _tokenService = tokenService;
 
         
-        [Authorize(Roles = "Admin")]
+        //[Authorize(Roles = "Admin")]
         [HttpPost("register")]
         public async Task<IActionResult> Register([FromBody] RegisterDto newUser)
         {
@@ -73,15 +69,23 @@ namespace ByG_Backend.src.Controller
                         identityErrors));
                 }
 
-                var roleResult = await _userManager.AddToRoleAsync(user, "User");
-                if (!roleResult.Succeeded)
+                var roles = await _userManager.GetRolesAsync(user);
+                var role = roles.FirstOrDefault() ?? "User";
+
+                // Asignar rol si no tiene ninguno
+                if (!roles.Any())
                 {
-                    var roleErrors = roleResult.Errors.Select(e => e.Description).ToList();
-                    return StatusCode(500, new ApiResponse<string>(
-                        false,
-                        "Error al asignar el rol al usuario",
-                        null,
-                        roleErrors));
+                    var roleToAssign = string.IsNullOrWhiteSpace(newUser.Role) ? "User" : newUser.Role;
+                    var roleResult = await _userManager.AddToRoleAsync(user, roleToAssign);
+                    if (!roleResult.Succeeded)
+                    {
+                        var roleErrors = roleResult.Errors.Select(e => e.Description).ToList();
+                        return StatusCode(500, new ApiResponse<string>(
+                            false,
+                            "Error al asignar el rol al usuario",
+                            null,
+                            roleErrors));
+                    }
                 }
 
                 var userDto = UserMapper.UserToNewUserDto(user);
@@ -124,12 +128,14 @@ namespace ByG_Backend.src.Controller
                 if (!okPassword)
                     return Unauthorized(new ApiResponse<string>(false, "Correo o contraseña inválidos"));
 
-                await _userManager.UpdateAsync(user);
+                TimeZoneInfo chileZone = TimeZoneInfo.FindSystemTimeZoneById("Chile/Continental");
+                user.LastAccess = TimeZoneInfo.ConvertTimeFromUtc(DateTime.UtcNow, chileZone);
+                
+                var updateResult = await _userManager.UpdateAsync(user);
 
                 var roles = await _userManager.GetRolesAsync(user);
-                var roleName = roles.FirstOrDefault() ?? "User";
+                var token = _tokenService.GenerateToken(user, roles.ToList());
 
-                var token = _tokenService.GenerateToken(user, roleName);
                 var userDto = UserMapper.UserToAuthenticatedDto(user, token);
 
                 return Ok(new ApiResponse<AuthenticatedUserDto>(true, "Login exitoso", userDto));
