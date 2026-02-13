@@ -19,10 +19,15 @@ namespace ByG_Backend.src.Models
         public int? UnitPrice { get; set; }
         public int? TotalPrice { get; set; }
 
-        //Relacion con Quote
+        // Relaciones
+
+        // Quote 1 a N QuoteItem
         public int QuoteId { get; set; }
         public Quote Quote { get; set; } = null!;
 
+        // PurchaseItem 1 a N QuoteItem (PurchaseItemId) para saber que produto de la solicitud se cotiza
+        public int PurchaseItemId { get; set; }
+        public PurchaseItem PurchaseItem { get; set; } = null!;
 
     }
 }
