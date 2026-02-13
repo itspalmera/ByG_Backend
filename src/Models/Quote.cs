@@ -16,7 +16,25 @@ namespace ByG_Backend.src.Models
         public DateOnly Date { get; set; }
 
         public decimal? TotalPrice { get; set; }
-        public List<QuoteItem>? Items { get; set; }
+
+
+        // Relaciones
+
+        // QuoteItem N a 1 Quote (padre)
+        public List<QuoteItem>? QuoteItems { get; set; }
+
+
+
+        // Purchase 1 a N Quote
+        public int PurchaseId { get; set; }
+        public Purchase Purchase { get; set; } = null!;
+
+        // Supplier 1 a N Quote
+        public int SupplierId { get; set; }
+        public Supplier Supplier { get; set; } = null!;
+
+        // Quote (principal) 1 a 0..1 PurchaseOrder  (Solo si es aceptada la cotizacion)
+        public PurchaseOrder? PurchaseOrder { get; set; }
 
     }
 }

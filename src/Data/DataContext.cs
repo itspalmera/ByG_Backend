@@ -17,6 +17,16 @@ namespace ByG_Backend.src.Data
         public DbSet<RequestQuote> RequestQuotes { get; set; } = null!;
         public DbSet<RequestQuoteSupplier> RequestQuoteSuppliers { get; set; } = null!;
 
+        public DbSet<Purchase> Purchase { get; set; } = null!;
+
+        public DbSet<PurchaseItem> PurchaseItem { get; set; } = null!;
+
+        public DbSet<PurchaseOrder> PurchaseOrder { get; set; } = null!;
+
+        public DbSet<Supplier> Supplier { get; set; } = null!;
+
+        
+
         //Carga identity
         protected override void OnModelCreating(ModelBuilder builder)
         {

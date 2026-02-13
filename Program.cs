@@ -3,31 +3,40 @@ using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using System.Text;
-//using ByG_Backend.src.Interfaces;
-//using ByG_Backend.src.Services;
+using ByG_Backend.src.Interfaces;
+using ByG_Backend.src.Services;
 
 using ByG_Backend.src.Data;
 using ByG_Backend.src.Models;
+using Resend;
+using ByG_Backend.src.Repository;
+using System.IdentityModel.Tokens.Jwt;
 
 var builder = WebApplication.CreateBuilder(args);
 
 // Add services to the container.
 builder.Services.AddOpenApi();
 
-builder.Services.AddIdentity<User, IdentityRole>(options =>
+JwtSecurityTokenHandler.DefaultInboundClaimTypeMap.Clear();
+
+builder.Services
+    .AddIdentity<User, IdentityRole>(options =>
     {
         options.User.RequireUniqueEmail = true;
         options.Password.RequiredLength = 6;
         options.Password.RequireNonAlphanumeric = false;
         options.SignIn.RequireConfirmedEmail = false;
-    }).AddEntityFrameworkStores<DataContext>();
+    })
+    .AddRoles<IdentityRole>()
+    .AddEntityFrameworkStores<DataContext>()
+    .AddDefaultTokenProviders();
 
-    builder.Services.AddAuthentication(options =>
-    {
-        options.DefaultAuthenticateScheme = JwtBearerDefaults.AuthenticationScheme;
-        options.DefaultChallengeScheme = JwtBearerDefaults.AuthenticationScheme;
-        options.DefaultScheme = JwtBearerDefaults.AuthenticationScheme;
-    }).AddJwtBearer(options =>
+builder.Services.AddAuthentication(options =>
+{
+    options.DefaultAuthenticateScheme = JwtBearerDefaults.AuthenticationScheme;
+    options.DefaultChallengeScheme = JwtBearerDefaults.AuthenticationScheme;
+    options.DefaultScheme = JwtBearerDefaults.AuthenticationScheme;
+}).AddJwtBearer(options =>
     {
         options.TokenValidationParameters = new TokenValidationParameters
         {
@@ -35,13 +44,24 @@ builder.Services.AddIdentity<User, IdentityRole>(options =>
             ValidIssuer = builder.Configuration["JWT:Issuer"],
             ValidateAudience = true,
             ValidAudience = builder.Configuration["JWT:Audience"],
+            RoleClaimType = "role",
             ValidateIssuerSigningKey = true,
             ValidateLifetime = true,
-            IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(builder.Configuration["JWT:SignInKey"]!)),
+            IssuerSigningKey = new SymmetricSecurityKey(
+                Encoding.UTF8.GetBytes(builder.Configuration["JWT:SignInKey"]!)
+            ),
+            NameClaimType = JwtRegisteredClaimNames.NameId
         };
     });
 
+builder.Services.AddOptions();
 
+// Configurar Resend para envío de emails
+builder.Services.Configure<ResendClientOptions>(options =>
+{
+    options.ApiToken = builder.Configuration["Resend:ApiKey"]!;
+});
+builder.Services.AddHttpClient<IResend, ResendClient>();
 
 // Configurar Entity Framework con SQLite
 builder.Services.AddDbContext<DataContext>(options =>
@@ -51,17 +71,18 @@ builder.Services.AddDbContext<DataContext>(options =>
 
 // Agregar controladores
 builder.Services.AddControllers();
-//builder.Services.AddScoped<ITokenServices, TokenService>();
+builder.Services.AddScoped<ITokenServices, TokenService>();
+builder.Services.AddScoped<IUserRepository, UserRepository>();
 
 
 var app = builder.Build();
 
 using (var scope = app.Services.CreateScope())
 {
-    var db = scope.ServiceProvider.GetRequiredService<DataContext>();
-    await db.Database.MigrateAsync(); 
+    var services = scope.ServiceProvider;
 
-    await IdentitySeeder.SeedRolesAsync(scope.ServiceProvider); 
+    await IdentitySeeder.SeedRolesAsync(services);
+    await IdentitySeeder.SeedAdminUserAsync(services);
 }
 
 // Configure the HTTP request pipeline.

@@ -21,5 +21,16 @@ namespace ByG_Backend.src.Models
         // Cuándo se creó y envió
         public DateTime CreatedAt { get; set; }
         public DateTime? SentAt { get; set; }
+
+        // Relaciones
+
+        // Purchase 1 a 1 RequestQuote (dependiente)
+        public int PurchaseId { get; set; }
+        public Purchase Purchase { get; set; } = null!;
+
+        // RequestQuoteSuppliers N a 1 RequestQuote (padre)
+        public List<RequestQuoteSupplier> RequestQuoteSuppliers { get; set; } = new();
+
+
     }
 }
