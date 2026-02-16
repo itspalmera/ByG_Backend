@@ -23,7 +23,7 @@ namespace ByG_Backend.src.Controller
         private readonly DataContext _context = context;
 
         //VER Y BUSCAR
-        [HttpGet] // GET https://localhost:50001/api/supplier
+        [HttpGet] // GET http://localhost:5280/api/supplier
         public async Task<ActionResult<ApiResponse<List<SupplierSummaryDto>>>> GetSuppliers()
         {
             // 1. Consulta optimizada con Proyección (.Select)
@@ -48,7 +48,7 @@ namespace ByG_Backend.src.Controller
         }
 
         //VER POR ID
-        [HttpGet("{id}")] // GET https://localhost:50001/api/supplier/1
+        [HttpGet("{id}")] // GET http://localhost:5280/api/supplier/1
         public async Task<ActionResult<ApiResponse<SupplierDetailDto>>> GetSupplierById(int id)
         {
             // 1. Búsqueda optimizada de solo lectura
@@ -93,7 +93,7 @@ namespace ByG_Backend.src.Controller
 
 
         //CREAR
-        [HttpPost] // POST https://localhost:50001/api/supplier
+        [HttpPost] // POST http://localhost:5280/api/supplier
         public async Task<ActionResult<ApiResponse<SupplierDetailDto>>> CreateSupplier([FromBody] SupplierCreateDto dto)
         {
             // 1. Regla de Negocio: Evitar duplicados por RUT o Email
@@ -162,7 +162,7 @@ namespace ByG_Backend.src.Controller
         }
 
         //EDITAR
-        [HttpPut("{id}")] // PUT https://localhost:50001/api/supplier/1
+        [HttpPut("{id}")] // PUT http://localhost:5280/api/supplier/1
         public async Task<ActionResult<ApiResponse<SupplierDetailDto>>> UpdateSupplier(int id, [FromBody] SupplierUpdateDto dto)
         {
             // 1. Buscar el proveedor (usamos FindAsync que por defecto hace tracking, necesario para el UPDATE)
@@ -229,6 +229,78 @@ namespace ByG_Backend.src.Controller
             ));
         }
 
+        // CAMBIAR ESTADO (Soft Delete / Activar)
+        [HttpPatch("{id}/toggle-status")] // PATCH http://localhost:5280/api/supplier/1/toggle-status
+        public async Task<ActionResult<ApiResponse<bool>>> ToggleSupplierStatus(int id)
+        {
+            // 1. Buscar el proveedor rastreándolo para actualizarlo
+            var supplier = await _context.Supplier.FindAsync(id);
+
+            if (supplier == null)
+            {
+                return NotFound(new ApiResponse<bool>(
+                    success: false,
+                    message: "Error al cambiar el estado.",
+                    errors: [$"No se encontró el proveedor con identificador {id}."]
+                ));
+            }
+
+            // 2. Invertir el estado actual (si era true pasa a false, y viceversa)
+            supplier.IsActive = !supplier.IsActive;
+
+            // 3. Guardar cambios
+            await _context.SaveChangesAsync();
+
+            // 4. Mensaje dinámico para el Frontend
+            string actionMessage = supplier.IsActive ? "activado" : "desactivado";
+
+            // Retornamos el nuevo estado booleano para que el Frontend actualice la UI
+            return Ok(new ApiResponse<bool>(
+                success: true,
+                message: $"Proveedor {actionMessage} exitosamente.",
+                data: supplier.IsActive 
+            ));
+        }
+
+        // ELIMINAR DEFINITIVAMENTE (Hard Delete)
+        [HttpDelete("{id}")] // DELETE http://localhost:5280/api/supplier/1
+        public async Task<ActionResult<ApiResponse<string>>> DeleteSupplier(int id)
+        {
+            // 1. Validar integridad referencial
+            bool hasHistory = await _context.Supplier
+                .AsNoTracking()
+                .AnyAsync(s => s.Id == id && (s.Quotes.Count != 0 || s.RequestQuoteSuppliers.Count != 0));
+
+            if (hasHistory)
+            {
+                return Conflict(new ApiResponse<string>( // Usamos <string> en lugar de <object>
+                    success: false,
+                    message: "No se puede eliminar el proveedor.",
+                    errors: ["El proveedor tiene cotizaciones o historial asociado. Por integridad del sistema, utilice la desactivación (Soft Delete)."]
+                ));
+            }
+
+            // 2. Eliminación ultra optimizada
+            int deletedRows = await _context.Supplier
+                .Where(s => s.Id == id)
+                .ExecuteDeleteAsync();
+
+            // 3. Verificar
+            if (deletedRows == 0)
+            {
+                return NotFound(new ApiResponse<string>(
+                    success: false,
+                    message: "Error al eliminar.",
+                    errors: [$"No se encontró el proveedor con identificador {id}."]
+                ));
+            }
+
+            // 4. Retorno exitoso sin datos adicionales (data será null por defecto)
+            return Ok(new ApiResponse<string>(
+                success: true,
+                message: "Proveedor eliminado definitivamente."
+            ));
+        }
     }
 
 
