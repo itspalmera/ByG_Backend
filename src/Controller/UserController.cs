@@ -22,7 +22,8 @@ namespace ByG_Backend.src.Controller
 {
     [ApiController]
     [Route("api/[controller]")]
-    public class UserController(ILogger<UserController> logger, DataContext context, UserManager<User> userManager, IResend resend, IUserRepository repository) : ControllerBase
+    public class UserController(
+        ILogger<UserController> logger, DataContext context, UserManager<User> userManager, IResend resend, IUserRepository repository) : ControllerBase
     {
         private readonly ILogger<UserController> _logger = logger;
         private readonly DataContext _context = context;

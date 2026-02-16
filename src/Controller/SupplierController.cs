@@ -1,0 +1,235 @@
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Threading.Tasks;
+
+using ByG_Backend.src.Data;
+using ByG_Backend.src.DTOs;
+using ByG_Backend.src.Helpers;
+using ByG_Backend.src.Mappers;
+using ByG_Backend.src.Models;
+using ByG_Backend.src.Interfaces;
+
+using Microsoft.EntityFrameworkCore;
+using Microsoft.AspNetCore.Mvc;
+using ByG_Backend.src.DTOs.Supplier;
+
+namespace ByG_Backend.src.Controller
+{
+    [ApiController]
+    [Route("api/[controller]")]
+    public class SupplierController(DataContext context) : ControllerBase
+    {
+        private readonly DataContext _context = context;
+
+        //VER Y BUSCAR
+        [HttpGet] // GET https://localhost:50001/api/supplier
+        public async Task<ActionResult<ApiResponse<List<SupplierSummaryDto>>>> GetSuppliers()
+        {
+            // 1. Consulta optimizada con Proyección (.Select)
+            var suppliers = await _context.Supplier
+                .AsNoTracking() // Fundamental para consultas de solo lectura
+                .Select(s => new SupplierSummaryDto(
+                    s.Id,
+                    s.Rut,
+                    s.BusinessName,
+                    s.Email,
+                    s.ProductCategories,
+                    s.IsActive
+                ))
+                .ToListAsync();
+
+            // 2. Retornar HTTP 200 OK con el listado
+            return Ok(new ApiResponse<List<SupplierSummaryDto>>(
+                success: true,
+                message: "Listado de proveedores obtenido exitosamente.",
+                data: suppliers
+            ));
+        }
+
+        //VER POR ID
+        [HttpGet("{id}")] // GET https://localhost:50001/api/supplier/1
+        public async Task<ActionResult<ApiResponse<SupplierDetailDto>>> GetSupplierById(int id)
+        {
+            // 1. Búsqueda optimizada de solo lectura
+            // AsNoTracking() es vital aquí para no sobrecargar la memoria de Entity Framework
+            var supplier = await _context.Supplier
+                .AsNoTracking()
+                .FirstOrDefaultAsync(s => s.Id == id);
+
+            // 2. Manejo del caso donde no existe (HTTP 404)
+            if (supplier == null)
+            {
+                return NotFound(new ApiResponse<SupplierDetailDto>(
+                    success: false,
+                    message: "Error al buscar el proveedor.",
+                    errors: [$"No se encontró ningún proveedor registrado con el identificador {id}."]
+                ));
+            }
+
+            // 3. Mapeo Manual (Modelo -> DTO de Detalle)
+            var supplierDto = new SupplierDetailDto(
+                supplier.Id,
+                supplier.Rut,
+                supplier.BusinessName,
+                supplier.ContactName,
+                supplier.Email,
+                supplier.Phone,
+                supplier.Address,
+                supplier.City,
+                supplier.ProductCategories,
+                supplier.RegisteredAt,
+                supplier.IsActive
+            );
+
+            // 4. Retornar HTTP 200 OK con los datos
+            return Ok(new ApiResponse<SupplierDetailDto>(
+                success: true,
+                message: "Proveedor obtenido exitosamente.",
+                data: supplierDto
+            ));
+        }
+
+
+
+        //CREAR
+        [HttpPost] // POST https://localhost:50001/api/supplier
+        public async Task<ActionResult<ApiResponse<SupplierDetailDto>>> CreateSupplier([FromBody] SupplierCreateDto dto)
+        {
+            // 1. Regla de Negocio: Evitar duplicados por RUT o Email
+            var existingSupplier = await _context.Supplier
+                .AsNoTracking() // Optimización: AsNoTracking hace la consulta más rápida y consume menos memoria
+                .FirstOrDefaultAsync(s => s.Rut == dto.Rut || s.Email == dto.Email);
+
+            if (existingSupplier != null)
+            {
+                bool isRutDuplicate = existingSupplier.Rut == dto.Rut;
+                string errorMsg = isRutDuplicate 
+                    ? "Ya existe un proveedor registrado con este RUT." 
+                    : "Ya existe un proveedor registrado con este Correo Electrónico.";
+
+                return Conflict(new ApiResponse<SupplierDetailDto>(
+                    success: false,
+                    message: "Error al crear el proveedor.",
+                    errors: [errorMsg]
+                )); // Conflict (409) es el estado HTTP correcto para datos duplicados
+            }
+
+            // 2. Mapeo Manual (DTO -> Modelo)
+            // Es más rápido en ejecución que usar librerías como AutoMapper
+            var newSupplier = new Supplier
+            {
+                Rut = dto.Rut,
+                BusinessName = dto.BusinessName,
+                ContactName = dto.ContactName,
+                Email = dto.Email,
+                Phone = dto.Phone,
+                Address = dto.Address,
+                City = dto.City,
+                ProductCategories = dto.ProductCategories
+                // RegisteredAt e IsActive ya tienen sus valores por defecto en el Model
+            };
+
+            // 3. Guardar en Base de Datos
+            _context.Supplier.Add(newSupplier);
+            await _context.SaveChangesAsync();
+
+            // 4. Preparar la respuesta mapeando (Modelo -> DTO de Detalle)
+            var returnDto = new SupplierDetailDto(
+                newSupplier.Id,
+                newSupplier.Rut,
+                newSupplier.BusinessName,
+                newSupplier.ContactName,
+                newSupplier.Email,
+                newSupplier.Phone,
+                newSupplier.Address,
+                newSupplier.City,
+                newSupplier.ProductCategories,
+                newSupplier.RegisteredAt,
+                newSupplier.IsActive
+            );
+
+            // 5. Retornar 201 Created (Estándar REST) con tu ApiResponse
+            return CreatedAtAction(
+                actionName: nameof(GetSupplierById), // Referencia al método GET por ID que haremos después
+                routeValues: new { id = newSupplier.Id },
+                value: new ApiResponse<SupplierDetailDto>(
+                    success: true, 
+                    message: "Proveedor creado exitosamente.", 
+                    data: returnDto
+                )
+            );
+        }
+
+        //EDITAR
+        [HttpPut("{id}")] // PUT https://localhost:50001/api/supplier/1
+        public async Task<ActionResult<ApiResponse<SupplierDetailDto>>> UpdateSupplier(int id, [FromBody] SupplierUpdateDto dto)
+        {
+            // 1. Buscar el proveedor (usamos FindAsync que por defecto hace tracking, necesario para el UPDATE)
+            var supplier = await _context.Supplier.FindAsync(id);
+
+            if (supplier == null)
+            {
+                return NotFound(new ApiResponse<SupplierDetailDto>(
+                    success: false,
+                    message: "Error al actualizar.",
+                    errors: [$"No se encontró el proveedor con identificador {id}."]
+                ));
+            }
+
+            // 2. Regla de Negocio: Validar que el nuevo RUT o Email no pertenezcan a OTRO proveedor
+            // Usamos AnyAsync porque es más rápido que FirstOrDefaultAsync cuando solo queremos saber si existe (devuelve un booleano)
+            var duplicateExists = await _context.Supplier
+                .AsNoTracking()
+                .AnyAsync(s => s.Id != id && (s.Rut == dto.Rut || s.Email == dto.Email));
+
+            if (duplicateExists)
+            {
+                return Conflict(new ApiResponse<SupplierDetailDto>(
+                    success: false,
+                    message: "Error al actualizar el proveedor.",
+                    errors: ["El RUT o Correo Electrónico ya está registrado en otro proveedor."]
+                ));
+            }
+
+            // 3. Mapeo Manual (DTO -> Modelo)
+            supplier.Rut = dto.Rut;
+            supplier.BusinessName = dto.BusinessName;
+            supplier.ContactName = dto.ContactName;
+            supplier.Email = dto.Email;
+            supplier.Phone = dto.Phone;
+            supplier.Address = dto.Address;
+            supplier.City = dto.City;
+            supplier.ProductCategories = dto.ProductCategories;
+            supplier.IsActive = dto.IsActive; // Si se pone en false, actúa como Soft Delete
+
+            // 4. Guardar los cambios (EF Core detecta las diferencias automáticamente y genera el UPDATE SQL)
+            await _context.SaveChangesAsync();
+
+            // 5. Preparar la respuesta mapeando (Modelo -> DTO de Detalle)
+            var updatedDto = new SupplierDetailDto(
+                supplier.Id,
+                supplier.Rut,
+                supplier.BusinessName,
+                supplier.ContactName,
+                supplier.Email,
+                supplier.Phone,
+                supplier.Address,
+                supplier.City,
+                supplier.ProductCategories,
+                supplier.RegisteredAt, // Mantenemos la fecha original de registro
+                supplier.IsActive
+            );
+
+            // 6. Retornar 200 OK
+            return Ok(new ApiResponse<SupplierDetailDto>(
+                success: true,
+                message: "Proveedor actualizado exitosamente.",
+                data: updatedDto
+            ));
+        }
+
+    }
+
+
+}
