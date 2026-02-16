@@ -15,18 +15,31 @@ namespace ByG_Backend.src.Mappers
                 Number = quote.Number,
                 Status = quote.Status,
                 TotalPrice = quote.TotalPrice,
-                Items = quote.Items?.Select(i => i.Name).ToArray() ?? Array.Empty<string>(),
+                Items = quote.QuoteItems?.Select(i => i.Name).ToArray() ?? Array.Empty<string>(),
                 Date = quote.Date.ToString("dd/MM/yyyy")
             };
 
- public static UserDto UserToUserDto(User user) =>
-        new()
-        {
-            FirstName = user.FirstName,
-            LastName = user.LastName,
-            Email = user.Email ?? string.Empty,
-            IsActive = user.IsActive,
-            Role = user.Role,
-            Registered = user.Registered.ToString("dd/MM/yyyy"), 
-            
-        };
+        public static UserDto UserToUserDto(User user) =>
+            new()
+            {
+                FirstName = user.FirstName,
+                LastName = user.LastName,
+                Email = user.Email ?? string.Empty,
+                IsActive = user.IsActive,
+                Role = user.Role,
+                Registered = user.Registered.ToString("dd/MM/yyyy"), 
+                
+            };
+
+        public static UpdateQuoteDto UpdateQuoteFromDto(Quote quote) =>
+            new()
+            {
+                Number = quote.Number,
+                Status = quote.Status,
+                TotalPrice = quote.TotalPrice,
+                Items = quote.QuoteItems?.Select(i => i.Name).ToArray() ?? Array.Empty<string>(),
+                Date = quote.Date.ToString("dd/MM/yyyy")
+            };
+        
+    }
+}

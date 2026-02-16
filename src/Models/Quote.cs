@@ -11,9 +11,9 @@ namespace ByG_Backend.src.Models
     public class Quote
     {
         public int Id { get; set; }
-        public int Number { get; set; }
+        public string Number { get; set; }
         public string Status { get; set; }
-        public DateOnly Date { get; set; }
+        public DateTime Date { get; set; }
 
         public decimal? TotalPrice { get; set; }
 
@@ -22,7 +22,6 @@ namespace ByG_Backend.src.Models
 
         // QuoteItem N a 1 Quote (padre)
         public List<QuoteItem>? QuoteItems { get; set; }
-
 
 
         // Purchase 1 a N Quote
