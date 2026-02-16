@@ -67,26 +67,11 @@ namespace ByG_Backend.src.Controller
                 ));
             }
 
-            // 3. Mapeo Manual (Modelo -> DTO de Detalle)
-            var supplierDto = new SupplierDetailDto(
-                supplier.Id,
-                supplier.Rut,
-                supplier.BusinessName,
-                supplier.ContactName,
-                supplier.Email,
-                supplier.Phone,
-                supplier.Address,
-                supplier.City,
-                supplier.ProductCategories,
-                supplier.RegisteredAt,
-                supplier.IsActive
-            );
-
-            // 4. Retornar HTTP 200 OK con los datos
+            // 3. Retornar HTTP 200 OK con los datos mappeados Modelo -> DTO
             return Ok(new ApiResponse<SupplierDetailDto>(
                 success: true,
                 message: "Proveedor obtenido exitosamente.",
-                data: supplierDto
+                data: supplier.ToDetailDto() // Usamos el método para mapear a DTO de Detalle
             ));
         }
 
@@ -115,48 +100,22 @@ namespace ByG_Backend.src.Controller
                 )); // Conflict (409) es el estado HTTP correcto para datos duplicados
             }
 
+
             // 2. Mapeo Manual (DTO -> Modelo)
-            // Es más rápido en ejecución que usar librerías como AutoMapper
-            var newSupplier = new Supplier
-            {
-                Rut = dto.Rut,
-                BusinessName = dto.BusinessName,
-                ContactName = dto.ContactName,
-                Email = dto.Email,
-                Phone = dto.Phone,
-                Address = dto.Address,
-                City = dto.City,
-                ProductCategories = dto.ProductCategories
-                // RegisteredAt e IsActive ya tienen sus valores por defecto en el Model
-            };
+            var newSupplier = dto.ToModelFromCreate(); // Usamos el método para mapear a Modelo
 
             // 3. Guardar en Base de Datos
             _context.Supplier.Add(newSupplier);
             await _context.SaveChangesAsync();
 
-            // 4. Preparar la respuesta mapeando (Modelo -> DTO de Detalle)
-            var returnDto = new SupplierDetailDto(
-                newSupplier.Id,
-                newSupplier.Rut,
-                newSupplier.BusinessName,
-                newSupplier.ContactName,
-                newSupplier.Email,
-                newSupplier.Phone,
-                newSupplier.Address,
-                newSupplier.City,
-                newSupplier.ProductCategories,
-                newSupplier.RegisteredAt,
-                newSupplier.IsActive
-            );
-
-            // 5. Retornar 201 Created (Estándar REST) con tu ApiResponse
+            // 4. Retornar 201 Created (Estándar REST) con tu ApiResponse y el DTO de Detalle del nuevo proveedor
             return CreatedAtAction(
                 actionName: nameof(GetSupplierById), // Referencia al método GET por ID que haremos después
                 routeValues: new { id = newSupplier.Id },
                 value: new ApiResponse<SupplierDetailDto>(
                     success: true, 
                     message: "Proveedor creado exitosamente.", 
-                    data: returnDto
+                    data: newSupplier.ToDetailDto() // Mapeamos el nuevo proveedor a DTO de Detalle para la respuesta
                 )
             );
         }
@@ -192,40 +151,21 @@ namespace ByG_Backend.src.Controller
                 ));
             }
 
-            // 3. Mapeo Manual (DTO -> Modelo)
-            supplier.Rut = dto.Rut;
-            supplier.BusinessName = dto.BusinessName;
-            supplier.ContactName = dto.ContactName;
-            supplier.Email = dto.Email;
-            supplier.Phone = dto.Phone;
-            supplier.Address = dto.Address;
-            supplier.City = dto.City;
-            supplier.ProductCategories = dto.ProductCategories;
-            supplier.IsActive = dto.IsActive; // Si se pone en false, actúa como Soft Delete
+
+
+
+            // 3. Mapper para mutar la entidad existente
+            supplier.UpdateModel(dto);
 
             // 4. Guardar los cambios (EF Core detecta las diferencias automáticamente y genera el UPDATE SQL)
             await _context.SaveChangesAsync();
 
-            // 5. Preparar la respuesta mapeando (Modelo -> DTO de Detalle)
-            var updatedDto = new SupplierDetailDto(
-                supplier.Id,
-                supplier.Rut,
-                supplier.BusinessName,
-                supplier.ContactName,
-                supplier.Email,
-                supplier.Phone,
-                supplier.Address,
-                supplier.City,
-                supplier.ProductCategories,
-                supplier.RegisteredAt, // Mantenemos la fecha original de registro
-                supplier.IsActive
-            );
 
-            // 6. Retornar 200 OK
+            // 5. Retornar 200 OK con el DTO de Detalle actualizado para que el Frontend tenga la información más reciente
             return Ok(new ApiResponse<SupplierDetailDto>(
                 success: true,
                 message: "Proveedor actualizado exitosamente.",
-                data: updatedDto
+                data: supplier.ToDetailDto() // Mapeamos el proveedor actualizado a DTO de Detalle para la respuesta
             ));
         }
 
