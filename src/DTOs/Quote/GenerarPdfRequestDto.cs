@@ -8,7 +8,7 @@ namespace ByG_Backend.src.DTOs
 {
     public class GenerarPdfRequestDto
     {
-        public required Purchase Compra { get; set; }
-        public required RequestQuote Solicitud { get; set;}
+        public Purchase Compra { get; set; }
+        public RequestQuote Solicitud { get; set; }
     }
 }

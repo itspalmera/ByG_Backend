@@ -1,5 +1,5 @@
 using System.ComponentModel.DataAnnotations;
-namespace ByG_Backend.src.DTOs.Purchase
+namespace ByG_Backend.src.DTOs
 {
 // Para crear items cuando viene la solicitud desde el sistema externo
     public record PurchaseItemCreateDto(

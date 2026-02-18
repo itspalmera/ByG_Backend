@@ -12,7 +12,7 @@ using ByG_Backend.src.Interfaces;
 
 using Microsoft.EntityFrameworkCore;
 using Microsoft.AspNetCore.Mvc;
-using ByG_Backend.src.DTOs.Supplier;
+using ByG_Backend.src.DTOs;
 
 namespace ByG_Backend.src.Controller
 {

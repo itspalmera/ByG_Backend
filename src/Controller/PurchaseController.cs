@@ -3,7 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 using ByG_Backend.src.Data;
-using ByG_Backend.src.DTOs.Purchase;
+using ByG_Backend.src.DTOs;
 using ByG_Backend.src.Helpers;
 using ByG_Backend.src.Mappers;
 using ByG_Backend.src.Models;

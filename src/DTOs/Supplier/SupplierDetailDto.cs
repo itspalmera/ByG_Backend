@@ -1,4 +1,4 @@
-namespace ByG_Backend.src.DTOs.Supplier
+namespace ByG_Backend.src.DTOs
 {
     public record SupplierDetailDto(
         int Id,

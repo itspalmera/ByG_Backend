@@ -1,4 +1,4 @@
-using ByG_Backend.src.DTOs.Supplier;
+using ByG_Backend.src.DTOs;
 using ByG_Backend.src.Models;
 
 namespace ByG_Backend.src.Mappers
