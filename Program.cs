@@ -75,6 +75,24 @@ builder.Services.AddScoped<ITokenServices, TokenService>();
 builder.Services.AddScoped<IUserRepository, UserRepository>();
 
 
+// CORS: Configuración flexible
+builder.Services.AddCors(options =>
+{
+    options.AddPolicy("DefaultCorsPolicy", policy =>
+    {
+        // Puedes poner "*" para permitir todo en desarrollo, 
+        // pero lo ideal es usar tus variables de entorno
+        var allowedOrigins = builder.Configuration.GetSection("CorsSettings:AllowedOrigins").Get<string[]>() 
+                             ?? new[] { "http://localhost:3000" }; // URL por defecto de Next.js
+
+        policy.WithOrigins(allowedOrigins)
+              .AllowAnyMethod()
+              .AllowAnyHeader()
+              .AllowCredentials();
+    });
+});
+
+
 var app = builder.Build();
 
 using (var scope = app.Services.CreateScope())
@@ -102,6 +120,8 @@ if (app.Environment.IsDevelopment())
 {
     app.MapOpenApi();
 }
+
+app.UseCors("DefaultCorsPolicy");
 
 app.UseHttpsRedirection();
 app.UseAuthentication();
