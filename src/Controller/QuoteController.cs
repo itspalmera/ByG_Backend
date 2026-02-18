@@ -246,10 +246,10 @@ namespace ByG_Backend.src.Controller
         // Create Quote (Admin)
         // =========================
         [HttpPost("create")]
-        public byte[] GenerarCotizacionPdf(Purchase compra, RequestQuote solicitud)
+        public byte[] GenerarCotizacionPdf([FromBody] GenerarPdfRequestDto request)
         {
             // 1. Instancias tu documento con los datos
-            var documento = new QuoteServices(compra, solicitud);
+            var documento = new QuoteServices(request.Compra, request.Solicitud);
 
             // 2. Le dices a QuestPDF que genere el archivo. 
             // Él internamente se encargará de llamar a Compose() y GetMetadata().

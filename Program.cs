@@ -81,8 +81,20 @@ using (var scope = app.Services.CreateScope())
 {
     var services = scope.ServiceProvider;
 
-    await IdentitySeeder.SeedRolesAsync(services);
-    await IdentitySeeder.SeedAdminUserAsync(services);
+    try 
+    {
+        var context = services.GetRequiredService<DataContext>();
+        
+        // ESTA LÍNEA ES CLAVE: Crea la BD y las tablas si no existen
+        await context.Database.MigrateAsync(); 
+
+        await IdentitySeeder.SeedRolesAsync(services);
+        await IdentitySeeder.SeedAdminUserAsync(services);
+    }
+    catch (Exception ex)
+    {
+        Console.WriteLine($"Error durante el inicio: {ex.Message}");
+    }
 }
 
 // Configure the HTTP request pipeline.
