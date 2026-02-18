@@ -6,14 +6,12 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
-using QuestPDF.Fluent;
 
 using ByG_Backend.src.Data;
 using ByG_Backend.src.DTOs;
 using ByG_Backend.src.Helpers;
 using ByG_Backend.src.Mappers;
 using ByG_Backend.src.Models;
-using ByG_Backend.src.Services;
 
 namespace ByG_Backend.src.Controller
 {
@@ -218,7 +216,7 @@ namespace ByG_Backend.src.Controller
             }
 
             
-            QuoteMapper.UpdateQuoteFromDto(quote);
+            QuoteMapper.UpdateQuoteFromDto(quote, dto);
 
             try
             {
@@ -240,28 +238,47 @@ namespace ByG_Backend.src.Controller
         }
 
 
-
-
         // =========================
-        // Create Quote (Admin)
+        // Crear cotización (Admin)
         // =========================
+        //[Authorize(Roles = "Admin")]
         [HttpPost("create")]
-        public byte[] GenerarCotizacionPdf([FromBody] GenerarPdfRequestDto request)
+        public async Task<ActionResult<ApiResponse<QuoteDto>>> CreateQuote([FromBody] CreateQuoteDto dto)
         {
-            // 1. Instancias tu documento con los datos
-            var documento = new QuoteServices(request.Compra, request.Solicitud);
+            if (!ModelState.IsValid)
+            {
+                return BadRequest(new ApiResponse<QuoteDto>(
+                    false,
+                    "Datos inválidos.",
+                    null,
+                    ModelState.Values.SelectMany(v => v.Errors).Select(e => e.ErrorMessage).ToList()
+                ));
+            }
 
-            // 2. Le dices a QuestPDF que genere el archivo. 
-            // Él internamente se encargará de llamar a Compose() y GetMetadata().
-            
-            // Si lo quieres guardar como archivo físico:
-            // documento.GeneratePdf("MiCotizacion.pdf");
+            var quote = QuoteMapper.CreateQuoteFromDto(dto);
 
-            // Si lo quieres en memoria (arreglo de bytes) como hablamos antes:
-            byte[] pdfBytes = documento.GeneratePdf(); 
+            _context.Quotes.Add(quote);
 
-            return pdfBytes;
+            try
+            {
+                await _context.SaveChangesAsync();
+            }
+            catch (DbUpdateException)
+            {
+                return StatusCode(500, new ApiResponse<QuoteDto>(
+                    false,
+                    "Error al crear la cotización"
+                ));
+            }
+
+            return Ok(new ApiResponse<QuoteDto>(
+                true,
+                "Cotización creada correctamente",
+                QuoteMapper.QuoteToQuoteDto(quote)
+            ));
         }
+
+    
     
     }
 

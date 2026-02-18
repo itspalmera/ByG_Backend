@@ -25,12 +25,12 @@ namespace ByG_Backend.src.Models
 
 
         // Purchase 1 a N Quote
-        public int PurchaseId { get; set; }
-        public Purchase Purchase { get; set; } = null!;
+        public int? PurchaseId { get; set; }
+        public Purchase? Purchase { get; set; } = null!;
 
         // Supplier 1 a N Quote
-        public int SupplierId { get; set; }
-        public Supplier Supplier { get; set; } = null!;
+        public int? SupplierId { get; set; }
+        public Supplier? Supplier { get; set; } = null!;
 
         // Quote (principal) 1 a 0..1 PurchaseOrder  (Solo si es aceptada la cotizacion)
         public PurchaseOrder? PurchaseOrder { get; set; }
