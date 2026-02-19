@@ -13,6 +13,8 @@ namespace ByG_Backend.src.DTOs
 
         public decimal? TotalPrice { get; set; }
 
+        public string? Observations { get; set; }
+
         public List<CreateQuoteItemDto> QuoteItems { get; set; }
 
 
