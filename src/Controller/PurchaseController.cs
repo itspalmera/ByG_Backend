@@ -21,7 +21,7 @@ namespace ByG_Backend.src.Controller
 
         // OBTENER COMPRAS (CON BÚSQUEDA Y FILTROS)
         [HttpGet] // GET /api/purchase
-        public async Task<ActionResult<ApiResponse<List<PurchaseSummaryDto>>>> GetPurchases([FromQuery] PurchaseQueryParameters queryParams)
+        public async Task<ActionResult<ApiResponse<PagedResponse<PurchaseSummaryDto>>>> GetPurchases([FromQuery] PurchaseQueryParameters queryParams)
         {
             // 1. Iniciar consulta (Queryable)
             var query = _context.Purchase.AsNoTracking().AsQueryable();
@@ -40,7 +40,6 @@ namespace ByG_Backend.src.Controller
             }
 
             // 3. FILTRO POR ESTADO (Status)
-            // Este suele ser un filtro de selección exacta (Dropdown en el frontend)
             if (!string.IsNullOrWhiteSpace(queryParams.Status))
             {
                 var status = queryParams.Status.ToLower();
@@ -60,21 +59,26 @@ namespace ByG_Backend.src.Controller
                 query = query.Where(p => p.RequestDate <= endDate);
             }
 
-            // 5. ORDENAMIENTO DINÁMICO
-            query = queryParams.SortBy?.ToLower() switch
+            // 5. ORDENAMIENTO DINÁMICO REFACTORIZADO
+            var sort = queryParams.SortBy?.ToLower() ?? "date_desc"; // Si viene nulo, asume date_desc
+            
+            query = sort switch
             {
                 "date_asc" => query.OrderBy(p => p.RequestDate),
-                "date_desc" => query.OrderByDescending(p => p.RequestDate), // Default visual
+                "date_desc" => query.OrderByDescending(p => p.RequestDate),
                 "project_asc" => query.OrderBy(p => p.ProjectName),
                 "project_desc" => query.OrderByDescending(p => p.ProjectName),
                 "status_asc" => query.OrderBy(p => p.Status),
-                // Por defecto: Las más recientes primero
-                _ => query.OrderByDescending(p => p.RequestDate) 
+                _ => query.OrderByDescending(p => p.RequestDate) // Fallback seguro
             };
 
-            // 6. EJECUCIÓN Y PROYECCIÓN
-            // IMPORTANTE: El Select va AL FINAL, después de filtrar y ordenar.
+            // 6. Contar total antes de paginar (después de filtrar, antes de Skip/Take)
+            var totalItems = await query.CountAsync();
+
+            // 7. Aplicar Paginación y Proyección (SIN OrderBy aquí, ya se hizo arriba)
             var purchases = await query
+                .Skip((queryParams.PageNumber - 1) * queryParams.PageSize)
+                .Take(queryParams.PageSize)
                 .Select(p => new PurchaseSummaryDto(
                     p.Id,
                     p.PurchaseNumber,
@@ -82,16 +86,17 @@ namespace ByG_Backend.src.Controller
                     p.Status,
                     p.RequestDate,
                     p.Requester,
-                    // Subconsulta optimizada para contar items
                     p.PurchaseItems != null ? p.PurchaseItems.Count : 0 
                 ))
                 .ToListAsync();
 
-            return Ok(new ApiResponse<List<PurchaseSummaryDto>>(
-                success: true,
-                message: "Listado de compras obtenido exitosamente.",
-                data: purchases
-            ));
+            var pagedData = new PagedResponse<PurchaseSummaryDto>(purchases, totalItems, queryParams.PageNumber, queryParams.PageSize);
+
+            return Ok(
+                new ApiResponse<PagedResponse<PurchaseSummaryDto>>(
+                    true, "Listado obtenido", pagedData
+                )
+            );
         }
 
         // OBTENER COMPRA POR ID (DETALLE)
