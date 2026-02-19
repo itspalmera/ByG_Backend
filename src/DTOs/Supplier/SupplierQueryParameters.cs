@@ -3,7 +3,7 @@ using System;
 using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
 
-namespace ByG_Backend.src.DTOs.Supplier
+namespace ByG_Backend.src.DTOs
 {
     // Usamos 'class' en lugar de 'record' aquí porque el framework de .NET 
     // enlaza mejor los parámetros [FromQuery] a propiedades con getters y setters.
