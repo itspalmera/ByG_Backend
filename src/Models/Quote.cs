@@ -11,8 +11,8 @@ namespace ByG_Backend.src.Models
     public class Quote
     {
         public int Id { get; set; }
-        public string Number { get; set; }
-        public string Status { get; set; }
+        public required string Number { get; set; }
+        public required string Status { get; set; }
         public DateTime Date { get; set; }
 
         public decimal? TotalPrice { get; set; }

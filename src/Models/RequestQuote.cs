@@ -16,7 +16,7 @@ namespace ByG_Backend.src.Models
         public string Number { get; set; } = null!;
 
         // Estado de la solicitud
-        public string Status { get; set; }
+        public required string Status { get; set; }
 
         // Cuándo se creó y envió
         public DateTime CreatedAt { get; set; }
