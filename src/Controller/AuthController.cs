@@ -135,6 +135,7 @@ namespace ByG_Backend.src.Controller
 
                 // Sin UnitOfWork: buscar usuario por email directamente con Identity
                 var user = await _userManager.FindByEmailAsync(loginDto.Email);
+
                 if (user == null)
                     return Unauthorized(new ApiResponse<string>(false, "Correo o contraseña inválidos"));
 
@@ -148,12 +149,18 @@ namespace ByG_Backend.src.Controller
                 TimeZoneInfo chileZone = TimeZoneInfo.FindSystemTimeZoneById("Chile/Continental");
                 user.LastAccess = TimeZoneInfo.ConvertTimeFromUtc(DateTime.UtcNow, chileZone);
                 
+
                 var updateResult = await _userManager.UpdateAsync(user);
 
                 var roles = await _userManager.GetRolesAsync(user);
                 var token = _tokenService.GenerateToken(user, roles.ToList());
 
-                var userDto = UserMapper.UserToAuthenticatedDto(user, token);
+                // Tomamos el primer rol (Identity devuelve lista, pero tu sistema parece usar uno solo)
+                // Si no tiene rol en Identity, usamos "User" por defecto o la propiedad user.Role
+                var currentRole = roles.FirstOrDefault() ?? user.Role ?? "User";
+
+                // Pasamos el rol al mapper
+                var userDto = UserMapper.UserToAuthenticatedDto(user, token, currentRole);
 
                 return Ok(new ApiResponse<AuthenticatedUserDto>(true, "Login exitoso", userDto));
             }

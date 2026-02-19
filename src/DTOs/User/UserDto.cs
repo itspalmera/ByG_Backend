@@ -5,7 +5,7 @@ using System.Threading.Tasks;
 
 namespace ByG_Backend.src.DTOs
 {
-    public class UserDto
+    public record UserDto
     {
 
         public string FirstName { get; set; } = null!;

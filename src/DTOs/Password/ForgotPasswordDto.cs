@@ -6,7 +6,7 @@ using System.Threading.Tasks;
 
 namespace ByG_Backend.src.DTO
 {
-    public class ForgotPasswordDto
+    public record ForgotPasswordDto
     {
         [Required(ErrorMessage = "El correo es obligatorio")]
         [EmailAddress(ErrorMessage = "Formato de correo inválido")]

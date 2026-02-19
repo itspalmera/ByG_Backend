@@ -6,7 +6,7 @@ using System.Threading.Tasks;
 
 namespace ByG_Backend.src.DTOs
 {
-    public class ChangeRoleDto
+    public record ChangeRoleDto
     {
         [Required]
         [EmailAddress (ErrorMessage = "El correo electrónico no es válido.")]

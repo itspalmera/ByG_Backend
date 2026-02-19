@@ -5,7 +5,7 @@ using System.Threading.Tasks;
 
 namespace ByG_Backend.src.DTOs
 {
-    public class UpdateProfileDto
+    public record UpdateProfileDto
     {
         public string? FirstName { get; set; } 
         public string? LastName { get; set; } 

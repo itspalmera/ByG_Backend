@@ -5,7 +5,7 @@ using System.Threading.Tasks;
 
 namespace ByG_Backend.src.DTOs
 {
-    public class AuthenticatedUserDto
+    public record AuthenticatedUserDto
     {
         public string FirstName { get; set; } = null!;
         public string LastName { get; set; } = null!;
@@ -13,6 +13,7 @@ namespace ByG_Backend.src.DTOs
         public string Phone { get; set; } = null!;
 
         public string Token { get; set; } = null!;
+        public string Role { get; set; } = null!;
 
 
         public DateOnly Registered { get; set; }
