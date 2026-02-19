@@ -26,7 +26,7 @@ namespace ByG_Backend.src.Controller
         // =========================
         // GET ALL WITH FILTERS, SEARCH, PAGINATION AND SORTING 
         // =========================
-        //[Authorize(Roles = "Admin")]
+        [Authorize(Roles = "Admin")]
         [HttpGet]
         public async Task<ActionResult<ApiResponse<IEnumerable<QuoteDto>>>> GetAll(
             [FromQuery] string? status,
@@ -93,7 +93,7 @@ namespace ByG_Backend.src.Controller
         // GET BY ID
         // =========================
 
-        //[Authorize(Roles = "Admin")] 
+        [Authorize(Roles = "Admin")] 
         [HttpGet("{id:int}")]
         public async Task<ActionResult<ApiResponse<Quote>>> GetById(int id)
         {
@@ -122,7 +122,7 @@ namespace ByG_Backend.src.Controller
         // TOGGLE STATUS (Admin)
         // =========================
 
-        //[Authorize(Roles = "Admin")]
+        [Authorize(Roles = "Admin")]
         [HttpPatch("status")]
         public async Task<ActionResult<ApiResponse<string>>> ToggleStatus([FromBody] QuoteToggleStatusDto dto)
         {
@@ -188,7 +188,7 @@ namespace ByG_Backend.src.Controller
         // UPDATE QUOTE (Admin)
         // =========================
 
-        //[Authorize(Roles = "Admin")]
+        [Authorize(Roles = "Admin")]
         [HttpPut("update")]
         public async Task<ActionResult<ApiResponse<QuoteDto>>> UpdateQuote([FromBody] UpdateQuoteDto dto)
         {
@@ -241,7 +241,7 @@ namespace ByG_Backend.src.Controller
         // =========================
         // Crear cotización (Admin)
         // =========================
-        //[Authorize(Roles = "Admin")]
+        [Authorize(Roles = "Admin")]
         [HttpPost("create")]
         public async Task<ActionResult<ApiResponse<QuoteDto>>> CreateQuote([FromBody] CreateQuoteDto dto)
         {

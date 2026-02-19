@@ -34,7 +34,7 @@ namespace ByG_Backend.src.Controller
         // =========================
         // GET ALL (Admin) + filtros inline
         // =========================
-        //[Authorize(Roles = "Admin")]
+        [Authorize(Roles = "Admin")]
         [HttpGet]
         public async Task<ActionResult<ApiResponse<IEnumerable<UserDto>>>> GetAll(
             [FromQuery] bool? isActive,
@@ -124,7 +124,7 @@ namespace ByG_Backend.src.Controller
         // =========================
         // SEARCH (Admin) by email OR name
         // =========================
-        //[Authorize(Roles = "Admin")]
+        [Authorize(Roles = "Admin")]
         [HttpGet("search")]
         public async Task<ActionResult<ApiResponse<UserDto>>> GetById([FromQuery] UserSearchDto search)
         {
@@ -162,7 +162,7 @@ namespace ByG_Backend.src.Controller
         // =========================
         // TOGGLE STATUS (Admin)
         // =========================
-        //[Authorize(Roles = "Admin")]
+        [Authorize(Roles = "Admin")]
         [HttpPatch("status")]
         public async Task<ActionResult<ApiResponse<string>>> ToggleStatus([FromBody] ToggleStatusDto dto)
         {
@@ -199,7 +199,7 @@ namespace ByG_Backend.src.Controller
         // =========================
         // UPDATE PROFILE (User)
         // =========================
-        //[Authorize(Roles = "User")]
+        [Authorize(Roles = "User")]
         [HttpPut("profile")]
         public async Task<ActionResult<ApiResponse<UserDto>>> UpdateProfile([FromBody] UpdateProfileDto dto)
         {
@@ -231,7 +231,7 @@ namespace ByG_Backend.src.Controller
         // =========================
         // CHANGE PASSWORD (User)
         // =========================
-        //[Authorize(Roles = "User")]
+        [Authorize(Roles = "User")]
         [HttpPost("forgot-password")]
         public async Task<IActionResult> ForgotPassword([FromBody] ForgotPasswordDto dto)
         {
@@ -258,7 +258,7 @@ namespace ByG_Backend.src.Controller
         **/
 
 
-        //[Authorize(Roles = "Admin")]
+        [Authorize(Roles = "Admin")]
         [HttpPatch("changeRole")]
         public async Task<IActionResult> ChangeRole([FromBody] ChangeRoleDto dto)
         {
