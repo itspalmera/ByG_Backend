@@ -28,12 +28,14 @@ namespace ByG_Backend.src.Services
         {
             var claims = new List<Claim>
             {
-                new Claim(ClaimTypes.NameIdentifier, user.Id),
+                new Claim(JwtRegisteredClaimNames.NameId, user.Id),
                 new Claim(JwtRegisteredClaimNames.Email, user.Email!),
             };
             foreach (var role in roles)
             {
-                claims.Add(new Claim(ClaimTypes.Role, role));
+                // CAMBIO 2: Usar string explícito "role" en lugar de ClaimTypes.Role
+                // Esto alinea el token con la configuración RoleClaimType = "role" del Program.cs
+                claims.Add(new Claim("role", role));
             }
             
             var creds = new SigningCredentials(_key, SecurityAlgorithms.HmacSha512Signature);

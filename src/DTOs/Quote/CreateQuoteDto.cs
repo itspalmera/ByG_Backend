@@ -6,7 +6,7 @@ using System.Threading.Tasks;
 
 namespace ByG_Backend.src.DTOs
 {
-    public class CreateQuoteDto
+    public record CreateQuoteDto
     {
         [Required]
         public required string Number { get; set; }

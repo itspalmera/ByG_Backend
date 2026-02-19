@@ -6,7 +6,7 @@ using System.ComponentModel.DataAnnotations;
 
 namespace ByG_Backend.src.DTOs
 {
-    public class LoginDto
+    public record LoginDto
     {
         [Required(ErrorMessage = "El email es requerido")]
         [EmailAddress(ErrorMessage = "El email no es válido")]

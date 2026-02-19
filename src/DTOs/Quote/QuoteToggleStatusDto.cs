@@ -6,7 +6,7 @@ using System.Threading.Tasks;
 
 namespace ByG_Backend.src.DTOs
 {
-    public class QuoteToggleStatusDto
+    public record QuoteToggleStatusDto
     {
 
         public int id { get; set; }

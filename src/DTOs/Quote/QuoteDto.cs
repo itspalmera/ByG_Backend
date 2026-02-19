@@ -6,7 +6,7 @@ using ByG_Backend.src.Models;
 
 namespace ByG_Backend.src.DTOs
 {
-    public class QuoteDto
+    public record QuoteDto
     {
         public string id { get; set; }
         public string Number { get; set; }

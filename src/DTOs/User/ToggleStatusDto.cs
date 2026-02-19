@@ -6,7 +6,7 @@ using System.Threading.Tasks;
 
 namespace ByG_Backend.src.DTOs
 {
-    public class ToggleStatusDto
+    public record ToggleStatusDto
     {
         [Required]
         [EmailAddress (ErrorMessage = "El campo Email debe ser una dirección de correo electrónico válida.")]
