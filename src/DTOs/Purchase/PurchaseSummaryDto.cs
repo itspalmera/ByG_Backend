@@ -1,4 +1,4 @@
-namespace ByG_Backend.src.DTOs.Purchase
+namespace ByG_Backend.src.DTOs
 {
     public record PurchaseSummaryDto(
         int Id,

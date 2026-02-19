@@ -1,6 +1,6 @@
 using System.ComponentModel.DataAnnotations;
 
-namespace ByG_Backend.src.DTOs.Purchase
+namespace ByG_Backend.src.DTOs
 {
     public record PurchaseCreateDto(
         [Required(ErrorMessage = "El Folio/Número de compra es obligatorio.")]

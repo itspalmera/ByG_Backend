@@ -16,8 +16,8 @@ namespace ByG_Backend.src.Models
         public string? Description { get; set; }
         public string Unit { get; set; }
         public int Quantity { get; set; }
-        public int? UnitPrice { get; set; }
-        public int? TotalPrice { get; set; }
+        public decimal? UnitPrice { get; set; }
+        public decimal? TotalPrice { get; set; }
 
         // Relaciones
 
@@ -26,8 +26,8 @@ namespace ByG_Backend.src.Models
         public Quote Quote { get; set; } = null!;
 
         // PurchaseItem 1 a N QuoteItem (PurchaseItemId) para saber que produto de la solicitud se cotiza
-        public int PurchaseItemId { get; set; }
-        public PurchaseItem PurchaseItem { get; set; } = null!;
+        public int? PurchaseItemId { get; set; }
+        public PurchaseItem? PurchaseItem { get; set; } = null!;
 
     }
 }

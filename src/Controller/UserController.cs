@@ -32,7 +32,7 @@ namespace ByG_Backend.src.Controller
         private readonly IUserRepository _repository = repository;
 
         // =========================
-        // GET ALL (Admin) + filtros inline (sin UserParams, sin metadata)
+        // GET ALL (Admin) + filtros inline
         // =========================
         //[Authorize(Roles = "Admin")]
         [HttpGet]

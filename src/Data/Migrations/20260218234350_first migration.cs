@@ -6,7 +6,7 @@ using Microsoft.EntityFrameworkCore.Migrations;
 namespace ByG_Backend.src.Data.Migrations
 {
     /// <inheritdoc />
-    public partial class InitialCreate : Migration
+    public partial class firstmigration : Migration
     {
         /// <inheritdoc />
         protected override void Up(MigrationBuilder migrationBuilder)
@@ -257,12 +257,12 @@ namespace ByG_Backend.src.Data.Migrations
                 {
                     Id = table.Column<int>(type: "INTEGER", nullable: false)
                         .Annotation("Sqlite:Autoincrement", true),
-                    Number = table.Column<int>(type: "INTEGER", nullable: false),
+                    Number = table.Column<string>(type: "TEXT", nullable: false),
                     Status = table.Column<string>(type: "TEXT", nullable: false),
-                    Date = table.Column<DateOnly>(type: "TEXT", nullable: false),
+                    Date = table.Column<DateTime>(type: "TEXT", nullable: false),
                     TotalPrice = table.Column<decimal>(type: "TEXT", nullable: true),
-                    PurchaseId = table.Column<int>(type: "INTEGER", nullable: false),
-                    SupplierId = table.Column<int>(type: "INTEGER", nullable: false)
+                    PurchaseId = table.Column<int>(type: "INTEGER", nullable: true),
+                    SupplierId = table.Column<int>(type: "INTEGER", nullable: true)
                 },
                 constraints: table =>
                 {
@@ -271,14 +271,12 @@ namespace ByG_Backend.src.Data.Migrations
                         name: "FK_Quotes_Purchase_PurchaseId",
                         column: x => x.PurchaseId,
                         principalTable: "Purchase",
-                        principalColumn: "Id",
-                        onDelete: ReferentialAction.Cascade);
+                        principalColumn: "Id");
                     table.ForeignKey(
                         name: "FK_Quotes_Supplier_SupplierId",
                         column: x => x.SupplierId,
                         principalTable: "Supplier",
-                        principalColumn: "Id",
-                        onDelete: ReferentialAction.Cascade);
+                        principalColumn: "Id");
                 });
 
             migrationBuilder.CreateTable(
@@ -368,10 +366,10 @@ namespace ByG_Backend.src.Data.Migrations
                     Description = table.Column<string>(type: "TEXT", nullable: true),
                     Unit = table.Column<string>(type: "TEXT", nullable: false),
                     Quantity = table.Column<int>(type: "INTEGER", nullable: false),
-                    UnitPrice = table.Column<int>(type: "INTEGER", nullable: true),
-                    TotalPrice = table.Column<int>(type: "INTEGER", nullable: true),
+                    UnitPrice = table.Column<decimal>(type: "TEXT", nullable: true),
+                    TotalPrice = table.Column<decimal>(type: "TEXT", nullable: true),
                     QuoteId = table.Column<int>(type: "INTEGER", nullable: false),
-                    PurchaseItemId = table.Column<int>(type: "INTEGER", nullable: false)
+                    PurchaseItemId = table.Column<int>(type: "INTEGER", nullable: true)
                 },
                 constraints: table =>
                 {
@@ -380,8 +378,7 @@ namespace ByG_Backend.src.Data.Migrations
                         name: "FK_QuoteItems_PurchaseItem_PurchaseItemId",
                         column: x => x.PurchaseItemId,
                         principalTable: "PurchaseItem",
-                        principalColumn: "Id",
-                        onDelete: ReferentialAction.Cascade);
+                        principalColumn: "Id");
                     table.ForeignKey(
                         name: "FK_QuoteItems_Quotes_QuoteId",
                         column: x => x.QuoteId,

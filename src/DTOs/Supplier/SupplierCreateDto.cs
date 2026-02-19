@@ -1,6 +1,6 @@
 using System.ComponentModel.DataAnnotations;
 
-namespace ByG_Backend.src.DTOs.Supplier
+namespace ByG_Backend.src.DTOs
 {
     public record SupplierCreateDto(
         [Required(ErrorMessage = "El RUT es obligatorio.")]

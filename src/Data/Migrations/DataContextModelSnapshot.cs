@@ -190,20 +190,21 @@ namespace ByG_Backend.src.Data.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("INTEGER");
 
-                    b.Property<DateOnly>("Date")
+                    b.Property<DateTime>("Date")
                         .HasColumnType("TEXT");
 
-                    b.Property<int>("Number")
-                        .HasColumnType("INTEGER");
+                    b.Property<string>("Number")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
 
-                    b.Property<int>("PurchaseId")
+                    b.Property<int?>("PurchaseId")
                         .HasColumnType("INTEGER");
 
                     b.Property<string>("Status")
                         .IsRequired()
                         .HasColumnType("TEXT");
 
-                    b.Property<int>("SupplierId")
+                    b.Property<int?>("SupplierId")
                         .HasColumnType("INTEGER");
 
                     b.Property<decimal?>("TotalPrice")
@@ -234,7 +235,7 @@ namespace ByG_Backend.src.Data.Migrations
                         .IsRequired()
                         .HasColumnType("TEXT");
 
-                    b.Property<int>("PurchaseItemId")
+                    b.Property<int?>("PurchaseItemId")
                         .HasColumnType("INTEGER");
 
                     b.Property<int>("Quantity")
@@ -243,15 +244,15 @@ namespace ByG_Backend.src.Data.Migrations
                     b.Property<int>("QuoteId")
                         .HasColumnType("INTEGER");
 
-                    b.Property<int?>("TotalPrice")
-                        .HasColumnType("INTEGER");
+                    b.Property<decimal?>("TotalPrice")
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("Unit")
                         .IsRequired()
                         .HasColumnType("TEXT");
 
-                    b.Property<int?>("UnitPrice")
-                        .HasColumnType("INTEGER");
+                    b.Property<decimal?>("UnitPrice")
+                        .HasColumnType("TEXT");
 
                     b.HasKey("Id");
 
@@ -608,15 +609,11 @@ namespace ByG_Backend.src.Data.Migrations
                 {
                     b.HasOne("ByG_Backend.src.Models.Purchase", "Purchase")
                         .WithMany("Quotes")
-                        .HasForeignKey("PurchaseId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
+                        .HasForeignKey("PurchaseId");
 
                     b.HasOne("ByG_Backend.src.Models.Supplier", "Supplier")
                         .WithMany("Quotes")
-                        .HasForeignKey("SupplierId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
+                        .HasForeignKey("SupplierId");
 
                     b.Navigation("Purchase");
 
@@ -627,9 +624,7 @@ namespace ByG_Backend.src.Data.Migrations
                 {
                     b.HasOne("ByG_Backend.src.Models.PurchaseItem", "PurchaseItem")
                         .WithMany("QuoteItems")
-                        .HasForeignKey("PurchaseItemId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
+                        .HasForeignKey("PurchaseItemId");
 
                     b.HasOne("ByG_Backend.src.Models.Quote", "Quote")
                         .WithMany("QuoteItems")
