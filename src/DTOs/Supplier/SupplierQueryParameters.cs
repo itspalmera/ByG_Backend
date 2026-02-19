@@ -10,6 +10,9 @@ namespace ByG_Backend.src.DTOs
     // Implementamos IValidatableObject para validaciones condicionales o cruzadas
     public class SupplierQueryParameters : IValidatableObject
     {
+        public int PageNumber { get; set; } = 1;
+        public int PageSize { get; set; } = 15; // Tamaño óptimo para tablas
+
         // Búsqueda general (RUT, Nombre, Correo)
         // Límite de seguridad: Nadie busca con más de 100 caracteres
         [MaxLength(100, ErrorMessage = "El término de búsqueda no puede exceder los 100 caracteres.")]

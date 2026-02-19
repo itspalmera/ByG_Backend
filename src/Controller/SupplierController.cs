@@ -22,20 +22,15 @@ namespace ByG_Backend.src.Controller
     {
         private readonly DataContext _context = context;
 
-        // VER Y BUSCAR (CON FILTROS Y ORDENAMIENTO)
-        [HttpGet] // GET http://localhost:5280/api/supplier
-        public async Task<ActionResult<ApiResponse<List<SupplierSummaryDto>>>> GetSuppliers([FromQuery] SupplierQueryParameters queryParams)
+        // VER Y BUSCAR (CON FILTROS Y ORDENAMIENTO PAGINADO)
+        [HttpGet] // GET /api/supplier
+        public async Task<ActionResult<ApiResponse<PagedResponse<SupplierSummaryDto>>>> GetSuppliers([FromQuery] SupplierQueryParameters queryParams)
         {
-            // 1. Iniciamos la consulta sin ejecutarla aún (IQueryable)
             var query = _context.Supplier.AsNoTracking().AsQueryable();
 
-            // 2. BÚSQUEDA GLOBAL (Smart Search)
             if (!string.IsNullOrWhiteSpace(queryParams.Search))
             {
-                // Convertimos a minúsculas para una búsqueda "Case-Insensitive" confiable
                 var searchTerm = queryParams.Search.ToLower();
-                
-                // Buscamos simultáneamente en RUT, Nombre de Empresa y Email
                 query = query.Where(s => 
                     s.Rut.ToLower().Contains(searchTerm) || 
                     s.BusinessName.ToLower().Contains(searchTerm) ||
@@ -43,21 +38,17 @@ namespace ByG_Backend.src.Controller
                 );
             }
 
-            // 3. FILTRO POR ESTADO (Activo / Inactivo)
             if (queryParams.IsActive.HasValue)
             {
                 query = query.Where(s => s.IsActive == queryParams.IsActive.Value);
             }
 
-            // 4. FILTRO POR CATEGORÍA DE PRODUCTO
             if (!string.IsNullOrWhiteSpace(queryParams.ProductCategory))
             {
                 var category = queryParams.ProductCategory.ToLower();
-                // Como 'ProductCategories' puede ser null, primero validamos que no lo sea
                 query = query.Where(s => s.ProductCategories != null && s.ProductCategories.ToLower().Contains(category));
             }
 
-            // 5. FILTRO POR RANGO DE FECHAS (RegisteredAt)
             if (queryParams.StartDate.HasValue)
             {
                 query = query.Where(s => s.RegisteredAt >= queryParams.StartDate.Value);
@@ -65,24 +56,26 @@ namespace ByG_Backend.src.Controller
             
             if (queryParams.EndDate.HasValue)
             {
-                // Buena práctica: Si el usuario manda "2026-02-18", queremos abarcar todo ese día hasta las 23:59:59.
                 var endDate = queryParams.EndDate.Value.AddDays(1).AddTicks(-1);
                 query = query.Where(s => s.RegisteredAt <= endDate);
             }
 
-            // 6. ORDENAMIENTO DINÁMICO (Patrón Switch moderno de C#)
             query = queryParams.SortBy?.ToLower() switch
             {
                 "name_asc" => query.OrderBy(s => s.BusinessName),
                 "name_desc" => query.OrderByDescending(s => s.BusinessName),
                 "date_asc" => query.OrderBy(s => s.RegisteredAt),
                 "date_desc" => query.OrderByDescending(s => s.RegisteredAt),
-                // Orden por defecto: Los más recientes primero
                 _ => query.OrderByDescending(s => s.RegisteredAt) 
             };
 
-            // 7. PROYECCIÓN Y EJECUCIÓN (Aquí recién golpeamos la Base de Datos)
+            // 1. Contar total antes de paginar
+            var totalItems = await query.CountAsync();
+
+            // 2. Paginar y Proyectar
             var suppliers = await query
+                .Skip((queryParams.PageNumber - 1) * queryParams.PageSize)
+                .Take(queryParams.PageSize)
                 .Select(s => new SupplierSummaryDto(
                     s.Id,
                     s.Rut,
@@ -93,13 +86,15 @@ namespace ByG_Backend.src.Controller
                 ))
                 .ToListAsync();
 
-            return Ok(new ApiResponse<List<SupplierSummaryDto>>(
+            // 3. Empaquetar
+            var pagedData = new PagedResponse<SupplierSummaryDto>(suppliers, totalItems, queryParams.PageNumber, queryParams.PageSize);
+
+            return Ok(new ApiResponse<PagedResponse<SupplierSummaryDto>>(
                 success: true,
                 message: "Listado de proveedores obtenido exitosamente.",
-                data: suppliers
+                data: pagedData
             ));
         }
-
 
         //VER POR ID
         [HttpGet("{id}")] // GET http://localhost:5280/api/supplier/1
