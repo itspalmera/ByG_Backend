@@ -124,35 +124,53 @@ namespace ByG_Backend.src.Controller
         [HttpPost] // POST /api/purchase
         public async Task<ActionResult<ApiResponse<PurchaseDetailDto>>> CreatePurchase([FromBody] PurchaseCreateDto dto)
         {
-            // 1. Validar Folio único
-            var folioExists = await _context.Purchase
-                .AsNoTracking()
-                .AnyAsync(p => p.PurchaseNumber == dto.PurchaseNumber);
-
-            if (folioExists)
+            using var transaction = await _context.Database.BeginTransactionAsync();
+            try
             {
-                return Conflict(new ApiResponse<PurchaseDetailDto>(
-                    success: false, message: "Error al crear.", errors: ["El Folio de Compra ya está registrado."]
-                ));
+                // 1. Validaciones previas
+                if (await _context.Purchase.AnyAsync(p => p.PurchaseNumber == dto.PurchaseNumber))
+                    return Conflict(new ApiResponse<PurchaseDetailDto>(false, "El Folio ya existe."));
+
+                // 2. Crear Compra
+                var newPurchase = dto.ToModelFromCreate();
+                newPurchase.Status = "Solicitud recibida"; // Estado inicial
+                _context.Purchase.Add(newPurchase);
+                await _context.SaveChangesAsync();
+
+                // 3. Crear RequestQuote (Siempre 1 a 1 con Purchase)
+                var requestQuote = new RequestQuote
+                {
+                    PurchaseId = newPurchase.Id,
+                    Number = newPurchase.PurchaseNumber.Replace("REQ", "RFQ"),
+                    Status = "Pendiente",
+                    CreatedAt = DateTime.UtcNow
+                };
+                _context.RequestQuotes.Add(requestQuote);
+                await _context.SaveChangesAsync();
+
+                // 4. Si el usuario envió proveedores seleccionados, los vinculamos de inmediato
+                if (dto.InitialSupplierIds != null && dto.InitialSupplierIds.Any())
+                {
+                    var relations = dto.InitialSupplierIds.Select(sId => new RequestQuoteSupplier
+                    {
+                        RequestQuoteId = requestQuote.Id,
+                        SupplierId = sId,
+                        SentAt = DateTime.UtcNow // O dejar nulo hasta que se envíe el correo realmente
+                    });
+                    _context.RequestQuoteSuppliers.AddRange(relations);
+                    await _context.SaveChangesAsync();
+                }
+
+                await transaction.CommitAsync();
+                return CreatedAtAction(nameof(GetPurchaseById), new { id = newPurchase.Id }, 
+                    new ApiResponse<PurchaseDetailDto>(true, "Compra y Solicitud iniciada.", newPurchase.ToDetailDto()));
             }
-
-            // 2. Mapear Compra y sus Productos simultáneamente
-            var newPurchase = dto.ToModelFromCreate();
-
-            // 3. Guardar todo en una sola transacción
-            _context.Purchase.Add(newPurchase);
-            await _context.SaveChangesAsync();
-
-            // 4. Retornar el detalle (la respuesta tendrá las banderas falsas y la lista de ítems)
-            return CreatedAtAction(
-                actionName: nameof(GetPurchaseById),
-                routeValues: new { id = newPurchase.Id },
-                value: new ApiResponse<PurchaseDetailDto>(
-                    success: true, message: "Compra creada exitosamente.", data: newPurchase.ToDetailDto()
-                )
-            );
+            catch (Exception ex)
+            {
+                await transaction.RollbackAsync();
+                return StatusCode(500, new ApiResponse<PurchaseDetailDto>(false, "Error: " + ex.Message));
+            }
         }
-
         // ACTUALIZAR DATOS DE LA COMPRA (Cabecera)
         [HttpPut("{id}")] // PUT /api/purchase/1
         public async Task<ActionResult<ApiResponse<PurchaseDetailDto>>> UpdatePurchase(int id, [FromBody] PurchaseUpdateDto dto)
@@ -242,5 +260,41 @@ namespace ByG_Backend.src.Controller
                 success: true, message: "Compra eliminada definitivamente."
             ));
         }
+    
+
+        // AGREGAR PROVEEDORES
+        [HttpPost("{purchaseId}/add-suppliers")]
+        public async Task<ActionResult<ApiResponse<string>>> AddSuppliersToQuote(int purchaseId, [FromBody] List<int> supplierIds)
+        {
+            // 1. Buscar la RequestQuote asociada a esa compra
+            var requestQuote = await _context.RequestQuotes
+                .FirstOrDefaultAsync(rq => rq.PurchaseId == purchaseId);
+
+            if (requestQuote == null) return NotFound(new ApiResponse<string>(false, "No existe solicitud de cotización."));
+
+            // 2. Filtrar proveedores que ya están agregados para evitar duplicados
+            var existingIds = await _context.RequestQuoteSuppliers
+                .Where(rqs => rqs.RequestQuoteId == requestQuote.Id)
+                .Select(rqs => rqs.SupplierId)
+                .ToListAsync();
+
+            var newIds = supplierIds.Except(existingIds).ToList();
+
+            if (!newIds.Any()) return BadRequest(new ApiResponse<string>(false, "Los proveedores ya están en la lista."));
+
+            // 3. Agregar los nuevos
+            var newRelations = newIds.Select(sId => new RequestQuoteSupplier
+            {
+                RequestQuoteId = requestQuote.Id,
+                SupplierId = sId,
+                SentAt = DateTime.UtcNow
+            });
+
+            _context.RequestQuoteSuppliers.AddRange(newRelations);
+            await _context.SaveChangesAsync();
+
+            return Ok(new ApiResponse<string>(true, "Proveedores agregados exitosamente."));
+        }
+
     }
 }
