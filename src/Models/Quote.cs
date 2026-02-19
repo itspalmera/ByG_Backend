@@ -17,6 +17,8 @@ namespace ByG_Backend.src.Models
 
         public decimal? TotalPrice { get; set; }
 
+        public string? Observations { get; set; }
+
 
         // Relaciones
 

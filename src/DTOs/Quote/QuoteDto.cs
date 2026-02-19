@@ -13,6 +13,9 @@ namespace ByG_Backend.src.DTOs
         public string Date { get; set; }
 
         public decimal? TotalPrice { get; set; }
-        public required string[] Items { get; set; }
+
+        public string? Observations { get; set; }
+        public List<QuoteItemDetailDto> Items { get; set; }
     }
+
 }

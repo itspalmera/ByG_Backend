@@ -12,11 +12,19 @@ namespace ByG_Backend.src.Mappers
         public static QuoteDto QuoteToQuoteDto(Quote quote) =>
             new()
             {
+                id = quote.Id.ToString(),
                 Number = quote.Number,
                 Status = quote.Status ?? "Pendiente",
                 TotalPrice = quote.TotalPrice,
-                Items = quote.QuoteItems?.Select(i => i.Name).ToArray() ?? Array.Empty<string>(),
-                Date = quote.Date.ToString("dd/MM/yyyy")
+                Date = quote.Date.ToString("dd/MM/yyyy"),
+                Observations = quote.Observations,
+                Items = quote.QuoteItems?.Select(i => new QuoteItemDetailDto
+                {
+                    Name = i.Name,
+                    Quantity = i.Quantity,
+                    UnitPrice = i.UnitPrice,
+                    Unit = i.Unit
+                }).ToList() ?? new List<QuoteItemDetailDto>()
             };
 
         public static UserDto UserToUserDto(User user) =>
@@ -67,8 +75,10 @@ namespace ByG_Backend.src.Mappers
                 Status = dto.Status ?? "Pendiente",
                 TotalPrice = dto.TotalPrice,
                 Date = fechaValida,
-                SupplierId = dto.SupplierId, 
-                PurchaseId = dto.PurchaseId,
+                Observations = dto.Observations,
+
+                SupplierId = dto.SupplierId > 0 ? dto.SupplierId : null,
+                PurchaseId = dto.PurchaseId > 0 ? dto.PurchaseId : null,
 
                 QuoteItems = dto.QuoteItems?.Select(itemDto => new QuoteItem 
                 { 
