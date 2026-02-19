@@ -6,6 +6,9 @@ namespace ByG_Backend.src.DTOs;
 
     public class PurchaseQueryParameters : IValidatableObject
     {
+        public int PageNumber { get; set; } = 1;
+        public int PageSize { get; set; } = 15; // Tamaño óptimo para tablas desktop
+
         // 1. Búsqueda inteligente (Folio, Proyecto, Solicitante)
         [MaxLength(100, ErrorMessage = "El término de búsqueda no puede exceder los 100 caracteres.")]
         public string? Search { get; set; }

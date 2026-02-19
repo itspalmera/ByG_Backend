@@ -26,7 +26,7 @@ namespace ByG_Backend.src.Controller
         // =========================
         // GET ALL WITH FILTERS, SEARCH, PAGINATION AND SORTING 
         // =========================
-        [Authorize(Roles = "Admin")]
+        
         [HttpGet]
         public async Task<ActionResult<ApiResponse<IEnumerable<QuoteDto>>>> GetAll(
             [FromQuery] string? status,
