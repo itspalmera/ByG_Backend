@@ -9,6 +9,7 @@ using ByG_Backend.src.Mappers;
 using ByG_Backend.src.Models;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.AspNetCore.Mvc;
+using ByG_Backend.src.DTOs;
 
 namespace ByG_Backend.src.Controller
 {
@@ -18,22 +19,71 @@ namespace ByG_Backend.src.Controller
     {
         private readonly DataContext _context = context;
 
-        // OBTENER COMPRAS (TABLA RESUMEN)
+        // OBTENER COMPRAS (CON BÚSQUEDA Y FILTROS)
         [HttpGet] // GET /api/purchase
-        public async Task<ActionResult<ApiResponse<List<PurchaseSummaryDto>>>> GetPurchases()
+        public async Task<ActionResult<ApiResponse<List<PurchaseSummaryDto>>>> GetPurchases([FromQuery] PurchaseQueryParameters queryParams)
         {
-            // Proyección optimizada: Sólo traemos las columnas necesarias para la tabla y contamos los items
-            var purchases = await _context.Purchase
-                .AsNoTracking()
-                .OrderByDescending(p => p.RequestDate) // 1. PRIMERO ORDENAMOS LA ENTIDAD
-                .Select(p => new PurchaseSummaryDto(   // 2. LUEGO PROYECTAMOS AL DTO
+            // 1. Iniciar consulta (Queryable)
+            var query = _context.Purchase.AsNoTracking().AsQueryable();
+
+            // 2. BÚSQUEDA GLOBAL (Search)
+            if (!string.IsNullOrWhiteSpace(queryParams.Search))
+            {
+                var term = queryParams.Search.ToLower();
+                
+                // Busca coincidencias en: Folio, Nombre del Proyecto o Solicitante
+                query = query.Where(p => 
+                    p.PurchaseNumber.ToLower().Contains(term) ||
+                    p.ProjectName.ToLower().Contains(term) ||
+                    p.Requester.ToLower().Contains(term)
+                );
+            }
+
+            // 3. FILTRO POR ESTADO (Status)
+            // Este suele ser un filtro de selección exacta (Dropdown en el frontend)
+            if (!string.IsNullOrWhiteSpace(queryParams.Status))
+            {
+                var status = queryParams.Status.ToLower();
+                query = query.Where(p => p.Status.ToLower() == status);
+            }
+
+            // 4. FILTRO POR RANGO DE FECHAS (RequestDate)
+            if (queryParams.StartDate.HasValue)
+            {
+                query = query.Where(p => p.RequestDate >= queryParams.StartDate.Value);
+            }
+
+            if (queryParams.EndDate.HasValue)
+            {
+                // Ajustamos al final del día (23:59:59) para incluir todo el día seleccionado
+                var endDate = queryParams.EndDate.Value.AddDays(1).AddTicks(-1);
+                query = query.Where(p => p.RequestDate <= endDate);
+            }
+
+            // 5. ORDENAMIENTO DINÁMICO
+            query = queryParams.SortBy?.ToLower() switch
+            {
+                "date_asc" => query.OrderBy(p => p.RequestDate),
+                "date_desc" => query.OrderByDescending(p => p.RequestDate), // Default visual
+                "project_asc" => query.OrderBy(p => p.ProjectName),
+                "project_desc" => query.OrderByDescending(p => p.ProjectName),
+                "status_asc" => query.OrderBy(p => p.Status),
+                // Por defecto: Las más recientes primero
+                _ => query.OrderByDescending(p => p.RequestDate) 
+            };
+
+            // 6. EJECUCIÓN Y PROYECCIÓN
+            // IMPORTANTE: El Select va AL FINAL, después de filtrar y ordenar.
+            var purchases = await query
+                .Select(p => new PurchaseSummaryDto(
                     p.Id,
                     p.PurchaseNumber,
                     p.ProjectName,
                     p.Status,
                     p.RequestDate,
                     p.Requester,
-                    p.PurchaseItems.Count // EF Core ahora traducirá esto a un simple (SELECT COUNT(*)...) sin problemas
+                    // Subconsulta optimizada para contar items
+                    p.PurchaseItems != null ? p.PurchaseItems.Count : 0 
                 ))
                 .ToListAsync();
 
