@@ -14,9 +14,11 @@ namespace ByG_Backend.src.DTOs
 
         string? Observations,
 
-        // Validamos que venga la lista de productos
         [Required(ErrorMessage = "La compra debe incluir productos.")]
         [MinLength(1, ErrorMessage = "Debe haber al menos un producto en la solicitud.")]
-        List<PurchaseItemCreateDto> Items
+        List<PurchaseItemCreateDto> Items,
+
+        //Permite al usuario elegir proveedores fijos desde el inicio
+        List<int>? InitialSupplierIds 
     );
 }

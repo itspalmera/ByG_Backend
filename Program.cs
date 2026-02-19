@@ -5,8 +5,7 @@ using Microsoft.IdentityModel.Tokens;
 using System.Text;
 using ByG_Backend.src.Interfaces;
 using ByG_Backend.src.Services;
-
-using ByG_Backend.src.Data;
+using ByG_Backend.src.Data; // Asegúrate de que este namespace incluya tu DataSeeder
 using ByG_Backend.src.Models;
 using Resend;
 using ByG_Backend.src.Repository;
@@ -67,23 +66,18 @@ builder.Services.AddHttpClient<IResend, ResendClient>();
 builder.Services.AddDbContext<DataContext>(options =>
     options.UseSqlite(builder.Configuration.GetConnectionString("DefaultConnection")));
 
-
-
 // Agregar controladores
 builder.Services.AddControllers();
 builder.Services.AddScoped<ITokenServices, TokenService>();
 builder.Services.AddScoped<IUserRepository, UserRepository>();
-
 
 // CORS: Configuración flexible
 builder.Services.AddCors(options =>
 {
     options.AddPolicy("DefaultCorsPolicy", policy =>
     {
-        // Puedes poner "*" para permitir todo en desarrollo, 
-        // pero lo ideal es usar tus variables de entorno
         var allowedOrigins = builder.Configuration.GetSection("CorsSettings:AllowedOrigins").Get<string[]>() 
-                             ?? new[] { "http://localhost:3000" }; // URL por defecto de Next.js
+                             ?? new[] { "http://localhost:3000" }; 
 
         policy.WithOrigins(allowedOrigins)
               .AllowAnyMethod()
@@ -92,9 +86,11 @@ builder.Services.AddCors(options =>
     });
 });
 
-
 var app = builder.Build();
 
+// ==========================================
+// ZONA DE INICIALIZACIÓN DE DATOS (SEEDING)
+// ==========================================
 using (var scope = app.Services.CreateScope())
 {
     var services = scope.ServiceProvider;
@@ -103,17 +99,25 @@ using (var scope = app.Services.CreateScope())
     {
         var context = services.GetRequiredService<DataContext>();
         
-        // ESTA LÍNEA ES CLAVE: Crea la BD y las tablas si no existen
+        // 1. Crea la BD y aplica migraciones pendientes
         await context.Database.MigrateAsync(); 
 
+        // 2. Seeder de Usuarios y Roles (Identity)
         await IdentitySeeder.SeedRolesAsync(services);
         await IdentitySeeder.SeedAdminUserAsync(services);
+
+        // 3. Seeder de Datos de Negocio (Compras, Proveedores, Cotizaciones)
+        //    Nota: Como este método no es async en el archivo que te di, se llama directo.
+        DataSeeder.Seed(context);
+        
+        Console.WriteLine("--> Datos de prueba (Compras/Proveedores) cargados correctamente.");
     }
     catch (Exception ex)
     {
-        Console.WriteLine($"Error durante el inicio: {ex.Message}");
+        Console.WriteLine($"Error durante el inicio y sembrado de datos: {ex.Message}");
     }
 }
+// ==========================================
 
 // Configure the HTTP request pipeline.
 if (app.Environment.IsDevelopment())

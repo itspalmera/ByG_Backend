@@ -9,6 +9,7 @@ using ByG_Backend.src.Mappers;
 using ByG_Backend.src.Models;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.AspNetCore.Mvc;
+using ByG_Backend.src.DTOs;
 
 namespace ByG_Backend.src.Controller
 {
@@ -18,22 +19,71 @@ namespace ByG_Backend.src.Controller
     {
         private readonly DataContext _context = context;
 
-        // OBTENER COMPRAS (TABLA RESUMEN)
+        // OBTENER COMPRAS (CON BÚSQUEDA Y FILTROS)
         [HttpGet] // GET /api/purchase
-        public async Task<ActionResult<ApiResponse<List<PurchaseSummaryDto>>>> GetPurchases()
+        public async Task<ActionResult<ApiResponse<List<PurchaseSummaryDto>>>> GetPurchases([FromQuery] PurchaseQueryParameters queryParams)
         {
-            // Proyección optimizada: Sólo traemos las columnas necesarias para la tabla y contamos los items
-            var purchases = await _context.Purchase
-                .AsNoTracking()
-                .OrderByDescending(p => p.RequestDate) // 1. PRIMERO ORDENAMOS LA ENTIDAD
-                .Select(p => new PurchaseSummaryDto(   // 2. LUEGO PROYECTAMOS AL DTO
+            // 1. Iniciar consulta (Queryable)
+            var query = _context.Purchase.AsNoTracking().AsQueryable();
+
+            // 2. BÚSQUEDA GLOBAL (Search)
+            if (!string.IsNullOrWhiteSpace(queryParams.Search))
+            {
+                var term = queryParams.Search.ToLower();
+                
+                // Busca coincidencias en: Folio, Nombre del Proyecto o Solicitante
+                query = query.Where(p => 
+                    p.PurchaseNumber.ToLower().Contains(term) ||
+                    p.ProjectName.ToLower().Contains(term) ||
+                    p.Requester.ToLower().Contains(term)
+                );
+            }
+
+            // 3. FILTRO POR ESTADO (Status)
+            // Este suele ser un filtro de selección exacta (Dropdown en el frontend)
+            if (!string.IsNullOrWhiteSpace(queryParams.Status))
+            {
+                var status = queryParams.Status.ToLower();
+                query = query.Where(p => p.Status.ToLower() == status);
+            }
+
+            // 4. FILTRO POR RANGO DE FECHAS (RequestDate)
+            if (queryParams.StartDate.HasValue)
+            {
+                query = query.Where(p => p.RequestDate >= queryParams.StartDate.Value);
+            }
+
+            if (queryParams.EndDate.HasValue)
+            {
+                // Ajustamos al final del día (23:59:59) para incluir todo el día seleccionado
+                var endDate = queryParams.EndDate.Value.AddDays(1).AddTicks(-1);
+                query = query.Where(p => p.RequestDate <= endDate);
+            }
+
+            // 5. ORDENAMIENTO DINÁMICO
+            query = queryParams.SortBy?.ToLower() switch
+            {
+                "date_asc" => query.OrderBy(p => p.RequestDate),
+                "date_desc" => query.OrderByDescending(p => p.RequestDate), // Default visual
+                "project_asc" => query.OrderBy(p => p.ProjectName),
+                "project_desc" => query.OrderByDescending(p => p.ProjectName),
+                "status_asc" => query.OrderBy(p => p.Status),
+                // Por defecto: Las más recientes primero
+                _ => query.OrderByDescending(p => p.RequestDate) 
+            };
+
+            // 6. EJECUCIÓN Y PROYECCIÓN
+            // IMPORTANTE: El Select va AL FINAL, después de filtrar y ordenar.
+            var purchases = await query
+                .Select(p => new PurchaseSummaryDto(
                     p.Id,
                     p.PurchaseNumber,
                     p.ProjectName,
                     p.Status,
                     p.RequestDate,
                     p.Requester,
-                    p.PurchaseItems.Count // EF Core ahora traducirá esto a un simple (SELECT COUNT(*)...) sin problemas
+                    // Subconsulta optimizada para contar items
+                    p.PurchaseItems != null ? p.PurchaseItems.Count : 0 
                 ))
                 .ToListAsync();
 
@@ -74,35 +124,53 @@ namespace ByG_Backend.src.Controller
         [HttpPost] // POST /api/purchase
         public async Task<ActionResult<ApiResponse<PurchaseDetailDto>>> CreatePurchase([FromBody] PurchaseCreateDto dto)
         {
-            // 1. Validar Folio único
-            var folioExists = await _context.Purchase
-                .AsNoTracking()
-                .AnyAsync(p => p.PurchaseNumber == dto.PurchaseNumber);
-
-            if (folioExists)
+            using var transaction = await _context.Database.BeginTransactionAsync();
+            try
             {
-                return Conflict(new ApiResponse<PurchaseDetailDto>(
-                    success: false, message: "Error al crear.", errors: ["El Folio de Compra ya está registrado."]
-                ));
+                // 1. Validaciones previas
+                if (await _context.Purchase.AnyAsync(p => p.PurchaseNumber == dto.PurchaseNumber))
+                    return Conflict(new ApiResponse<PurchaseDetailDto>(false, "El Folio ya existe."));
+
+                // 2. Crear Compra
+                var newPurchase = dto.ToModelFromCreate();
+                newPurchase.Status = "Solicitud recibida"; // Estado inicial
+                _context.Purchase.Add(newPurchase);
+                await _context.SaveChangesAsync();
+
+                // 3. Crear RequestQuote (Siempre 1 a 1 con Purchase)
+                var requestQuote = new RequestQuote
+                {
+                    PurchaseId = newPurchase.Id,
+                    Number = newPurchase.PurchaseNumber.Replace("REQ", "RFQ"),
+                    Status = "Pendiente",
+                    CreatedAt = DateTime.UtcNow
+                };
+                _context.RequestQuotes.Add(requestQuote);
+                await _context.SaveChangesAsync();
+
+                // 4. Si el usuario envió proveedores seleccionados, los vinculamos de inmediato
+                if (dto.InitialSupplierIds != null && dto.InitialSupplierIds.Any())
+                {
+                    var relations = dto.InitialSupplierIds.Select(sId => new RequestQuoteSupplier
+                    {
+                        RequestQuoteId = requestQuote.Id,
+                        SupplierId = sId,
+                        SentAt = DateTime.UtcNow // O dejar nulo hasta que se envíe el correo realmente
+                    });
+                    _context.RequestQuoteSuppliers.AddRange(relations);
+                    await _context.SaveChangesAsync();
+                }
+
+                await transaction.CommitAsync();
+                return CreatedAtAction(nameof(GetPurchaseById), new { id = newPurchase.Id }, 
+                    new ApiResponse<PurchaseDetailDto>(true, "Compra y Solicitud iniciada.", newPurchase.ToDetailDto()));
             }
-
-            // 2. Mapear Compra y sus Productos simultáneamente
-            var newPurchase = dto.ToModelFromCreate();
-
-            // 3. Guardar todo en una sola transacción
-            _context.Purchase.Add(newPurchase);
-            await _context.SaveChangesAsync();
-
-            // 4. Retornar el detalle (la respuesta tendrá las banderas falsas y la lista de ítems)
-            return CreatedAtAction(
-                actionName: nameof(GetPurchaseById),
-                routeValues: new { id = newPurchase.Id },
-                value: new ApiResponse<PurchaseDetailDto>(
-                    success: true, message: "Compra creada exitosamente.", data: newPurchase.ToDetailDto()
-                )
-            );
+            catch (Exception ex)
+            {
+                await transaction.RollbackAsync();
+                return StatusCode(500, new ApiResponse<PurchaseDetailDto>(false, "Error: " + ex.Message));
+            }
         }
-
         // ACTUALIZAR DATOS DE LA COMPRA (Cabecera)
         [HttpPut("{id}")] // PUT /api/purchase/1
         public async Task<ActionResult<ApiResponse<PurchaseDetailDto>>> UpdatePurchase(int id, [FromBody] PurchaseUpdateDto dto)
@@ -192,5 +260,41 @@ namespace ByG_Backend.src.Controller
                 success: true, message: "Compra eliminada definitivamente."
             ));
         }
+    
+
+        // AGREGAR PROVEEDORES
+        [HttpPost("{purchaseId}/add-suppliers")]
+        public async Task<ActionResult<ApiResponse<string>>> AddSuppliersToQuote(int purchaseId, [FromBody] List<int> supplierIds)
+        {
+            // 1. Buscar la RequestQuote asociada a esa compra
+            var requestQuote = await _context.RequestQuotes
+                .FirstOrDefaultAsync(rq => rq.PurchaseId == purchaseId);
+
+            if (requestQuote == null) return NotFound(new ApiResponse<string>(false, "No existe solicitud de cotización."));
+
+            // 2. Filtrar proveedores que ya están agregados para evitar duplicados
+            var existingIds = await _context.RequestQuoteSuppliers
+                .Where(rqs => rqs.RequestQuoteId == requestQuote.Id)
+                .Select(rqs => rqs.SupplierId)
+                .ToListAsync();
+
+            var newIds = supplierIds.Except(existingIds).ToList();
+
+            if (!newIds.Any()) return BadRequest(new ApiResponse<string>(false, "Los proveedores ya están en la lista."));
+
+            // 3. Agregar los nuevos
+            var newRelations = newIds.Select(sId => new RequestQuoteSupplier
+            {
+                RequestQuoteId = requestQuote.Id,
+                SupplierId = sId,
+                SentAt = DateTime.UtcNow
+            });
+
+            _context.RequestQuoteSuppliers.AddRange(newRelations);
+            await _context.SaveChangesAsync();
+
+            return Ok(new ApiResponse<string>(true, "Proveedores agregados exitosamente."));
+        }
+
     }
 }
