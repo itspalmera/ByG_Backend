@@ -18,6 +18,7 @@ namespace ByG_Backend.src.Mappers
                 TotalPrice = quote.TotalPrice,
                 Date = quote.Date.ToString("dd/MM/yyyy"),
                 Observations = quote.Observations,
+                SupplierName = quote.Supplier?.BusinessName ?? "Sin proveedor",
                 Items = quote.QuoteItems?.Select(i => new QuoteItemDetailDto
                 {
                     Name = i.Name,
@@ -27,17 +28,6 @@ namespace ByG_Backend.src.Mappers
                 }).ToList() ?? new List<QuoteItemDetailDto>()
             };
 
-        public static UserDto UserToUserDto(User user) =>
-            new()
-            {
-                FirstName = user.FirstName,
-                LastName = user.LastName,
-                Email = user.Email ?? string.Empty,
-                IsActive = user.IsActive,
-                Role = user.Role,
-                Registered = user.Registered.ToString("dd/MM/yyyy"), 
-                
-            };
 
         // Método para actualizar un Quote existente desde un DTO
         public static void UpdateQuoteFromDto(Quote quote, UpdateQuoteDto dto)

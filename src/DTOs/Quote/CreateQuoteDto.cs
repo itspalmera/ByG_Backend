@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.ComponentModel.DataAnnotations;
 using System.Linq;
 using System.Threading.Tasks;
 
@@ -7,14 +8,24 @@ namespace ByG_Backend.src.DTOs
 {
     public class CreateQuoteDto
     {
-        public string Number { get; set; }
-        public string Status { get; set; }
-        public string Date { get; set; }
+        [Required]
+        public required string Number { get; set; }
+
+        [Required]
+        [RegularExpression("^(Pending|Approved|Rejected)$", ErrorMessage = "El estado debe ser 'Pendiente', 'Aprovado' o 'Rechazado'.")]
+        public required string Status { get; set; }
+
+        [Required]
+        [RegularExpression(@"^\d{4}-\d{2}-\d{2}$", ErrorMessage = "La fecha debe tener el formato DD-MM-AAAA.")]
+        public required string Date { get; set; }
+
 
         public decimal? TotalPrice { get; set; }
 
+        [StringLength(500, ErrorMessage = "Las observaciones no pueden exceder los 500 caracteres.")]
         public string? Observations { get; set; }
 
+        [Required (ErrorMessage = "La lista de items no puede estar vacía.")]
         public List<CreateQuoteItemDto> QuoteItems { get; set; }
 
 
