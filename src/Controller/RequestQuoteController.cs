@@ -28,6 +28,7 @@ namespace ByG_Backend.src.Controller
             [FromQuery] string? status,
             [FromQuery] string? searchTerm,
             [FromQuery] string? orderBy,
+            [FromQuery] string? purchaseId = null,
             [FromQuery] int pageNumber = 1,
             [FromQuery] int pageSize = 10
         )
@@ -43,6 +44,11 @@ namespace ByG_Backend.src.Controller
             if (!string.IsNullOrWhiteSpace(status))
             {
                 query = query.Where(q => q.Status == status);
+            }
+
+            if (!string.IsNullOrWhiteSpace(purchaseId))
+            {
+                query = query.Where(q => q.PurchaseId.ToString() == purchaseId);
             }
 
             if (!string.IsNullOrWhiteSpace(searchTerm))
