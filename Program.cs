@@ -10,6 +10,7 @@ using ByG_Backend.src.Models;
 using Resend;
 using ByG_Backend.src.Repository;
 using System.IdentityModel.Tokens.Jwt;
+using System.Security.Claims;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -41,15 +42,21 @@ builder.Services.AddAuthentication(options =>
         {
             ValidateIssuer = true,
             ValidIssuer = builder.Configuration["JWT:Issuer"],
+
             ValidateAudience = true,
             ValidAudience = builder.Configuration["JWT:Audience"],
-            RoleClaimType = "role",
+
+            
+
             ValidateIssuerSigningKey = true,
             ValidateLifetime = true,
             IssuerSigningKey = new SymmetricSecurityKey(
                 Encoding.UTF8.GetBytes(builder.Configuration["JWT:SignInKey"]!)
             ),
-            NameClaimType = JwtRegisteredClaimNames.NameId
+            // Usamos los tipos estándar que coinciden con TokenService.cs
+        
+            NameClaimType = ClaimTypes.NameIdentifier,
+            RoleClaimType = ClaimTypes.Role
         };
     });
 
