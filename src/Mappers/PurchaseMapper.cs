@@ -10,30 +10,36 @@ namespace ByG_Backend.src.Mappers
         public static PurchaseDetailDto ToDetailDto(this Purchase purchase)
         {
             return new PurchaseDetailDto(
-                purchase.Id,
-                purchase.PurchaseNumber,
-                purchase.ProjectName,
-                purchase.Status,
-                purchase.RequestDate,
-                purchase.UpdatedAt,
-                purchase.Requester,
-                purchase.Observations,
-                
-                // Mapeo de la lista de productos (hijos)
-                PurchaseItems: purchase.PurchaseItems?.Select(item => new PurchaseItemDto(
-                    item.Id,
-                    item.Name,
-                    item.BrandModel,
-                    item.Description,
-                    item.Unit,
-                    item.Size,
-                    item.Quantity
-                )).ToList() ?? new List<PurchaseItemDto>(),
+            purchase.Id,
+            purchase.PurchaseNumber,
+            purchase.ProjectName,
+            purchase.Status,
+            purchase.RequestDate,
+            purchase.UpdatedAt,
+            purchase.Requester,
+            purchase.Observations,
+            
+            // Mapeo de items
+            purchase.PurchaseItems?.Select(item => new PurchaseItemDto(
+                item.Id, item.Name, item.BrandModel, item.Description, 
+                item.Unit, item.Size, item.Quantity
+            )).ToList() ?? new List<PurchaseItemDto>(),
 
-                // Banderas dinámicas para la UI del Frontend evaluando si las relaciones existen
-                HasRequestQuote: purchase.RequestQuote != null,
-                HasPurchaseOrder: purchase.PurchaseOrder != null
-            );
+            // === AQUÍ ESTÁ LA MAGIA ===
+            // En lugar de solo true/false, mapeamos el objeto entero si existe
+            RequestQuote: purchase.RequestQuote != null ? new RequestQuoteDto
+            {
+                Number = purchase.RequestQuote.Number,
+                Status = purchase.RequestQuote.Status,
+                CreatedAt = purchase.RequestQuote.CreatedAt,
+                // Mapeamos los proveedores para el contador del frontend
+                RequestQuoteSuppliers = purchase.RequestQuote.RequestQuoteSuppliers
+                    .Select(s => new RequestQuoteSupplierDto { SupplierId = s.SupplierId })
+                    .ToList()
+            } : null,
+
+            HasPurchaseOrder: purchase.PurchaseOrder != null
+        );
         }
 
         // 2. DTO -> Modelo (Para Crear la Compra desde el Sistema Externo)

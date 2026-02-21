@@ -11,16 +11,20 @@ using ByG_Backend.src.Mappers;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using QuestPDF.Fluent;
+using ByG_Backend.src.Models;
+using ByG_Backend.src.Options;
+using Microsoft.Extensions.Options;
 
 namespace ByG_Backend.src.Controller
 {
     [ApiController]
     [Route("api/Request")]
     public class RequestQuoteController(
-        ILogger<RequestQuoteController> logger, DataContext context) : ControllerBase
+        ILogger<RequestQuoteController> logger, DataContext context, IOptions<CompanyInfoOptions> companyOptions) : ControllerBase
     {
         private readonly ILogger<RequestQuoteController> _logger = logger;
         private readonly DataContext _context = context;
+        private readonly CompanyInfoOptions _company = companyOptions.Value;
 
         //[Authorize(Roles = "Admin")]
         [HttpGet]
@@ -87,25 +91,47 @@ namespace ByG_Backend.src.Controller
             ));
         }
 
+
+
+        //[Authorize(Roles = "Admin")] 
+        [HttpGet("{id:int}")]
+        public async Task<ActionResult<ApiResponse<RequestQuote>>> GetById(int id)
+        {
+            var requestQuote = await _context.RequestQuotes
+                .Include(q => q.RequestQuoteSuppliers)
+                .AsNoTracking()
+                .FirstOrDefaultAsync(q => q.Id == id);
+
+            if (requestQuote == null)
+            {
+                return NotFound(new ApiResponse<RequestQuote>(
+                    false,
+                    "Solicitud de cotización no encontrada"
+                ));
+            }
+
+            return Ok(new ApiResponse<RequestQuote>(
+                true,
+                "Solicitud de cotización encontrada",
+                requestQuote
+            ));
+        }
+
+
         // =========================
         // Create Quote (Admin)
         // =========================
         [HttpPost("create")]
-        public byte[] GenerarCotizacionPdf([FromBody] GenerarPdfRequestDto request)
+        public byte[] GenerarCotizacionPdf([FromBody] PdfRequestDto request)
         {
-            // 1. Instancias tu documento con los datos
-            var documento = new QuoteServices(request.Compra, request.Solicitud);
+            // 1. Invocamos al mapper para obtener los modelos originales
+            var (compra, solicitud) = PdfMapper.MapDtoToModels(request);
 
-            // 2. Le dices a QuestPDF que genere el archivo. 
-            // Él internamente se encargará de llamar a Compose() y GetMetadata().
-            
-            // Si lo quieres guardar como archivo físico:
-            // documento.GeneratePdf("MiCotizacion.pdf");
+            // 2. Instancias tu documento con los modelos mapeados
+            var documento = new QuoteServices(compra, solicitud, _company);
 
-            // Si lo quieres en memoria (arreglo de bytes) como hablamos antes:
-            byte[] pdfBytes = documento.GeneratePdf(); 
-
-            return pdfBytes;
+            // 3. Generas y retornas el PDF
+            return documento.GeneratePdf(); 
         }
     }
 }

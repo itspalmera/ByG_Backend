@@ -6,20 +6,25 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using QuestPDF.Fluent;
 
 using ByG_Backend.src.Data;
 using ByG_Backend.src.DTOs;
 using ByG_Backend.src.Helpers;
 using ByG_Backend.src.Mappers;
 using ByG_Backend.src.Models;
+using ByG_Backend.src.Services;
+using ByG_Backend.src.Options;
+using Microsoft.Extensions.Options;
 
 namespace ByG_Backend.src.Controller
 {
     [ApiController]
     [Route("api/[controller]")]
-    public class QuoteController(DataContext context) : ControllerBase
+    public class QuoteController(DataContext context, IOptions<CompanyInfoOptions> companyOptions) : ControllerBase
     {
         private readonly DataContext _context = context;
+        private readonly CompanyInfoOptions _company = companyOptions.Value;
 
 
 
@@ -122,48 +127,84 @@ namespace ByG_Backend.src.Controller
         // TOGGLE STATUS (Admin)
         // =========================
 
+        // =========================
+        // TOGGLE STATUS (Admin)
+        // =========================
         [Authorize(Roles = "Admin")]
         [HttpPatch("status")]
         public async Task<ActionResult<ApiResponse<string>>> ToggleStatus([FromBody] QuoteToggleStatusDto dto)
         {
             if (!ModelState.IsValid)
             {
-                return BadRequest(new ApiResponse<string>(
-                    false,
-                    "Datos inválidos.",
-                    null,
-                    ModelState.Values.SelectMany(v => v.Errors).Select(e => e.ErrorMessage).ToList()
-                ));
+                return BadRequest(new ApiResponse<string>(false, "Datos inválidos.", null, ModelState.Values.SelectMany(v => v.Errors).Select(e => e.ErrorMessage).ToList()));
             }
 
-            var quote = await _context.Quotes.FirstOrDefaultAsync(q => q.Id == dto.id);
+            // 1. Buscamos la cotización y cargamos los datos necesarios para el PDF (Purchase y RequestQuote)
+            var quote = await _context.Quotes
+                .Include(q => q.Purchase)
+                    .ThenInclude(p => p.PurchaseItems) // Necesario para la lista de items del PDF
+                .Include(q => q.Purchase)
+                    .ThenInclude(p => p.RequestQuote) // Necesario para el número de solicitud
+                .FirstOrDefaultAsync(q => q.Id == dto.id);
+
             if (quote == null)
                 return NotFound(new ApiResponse<string>(false, "Cotización no encontrada"));
 
-            // Normaliza el status (opcional, recomendado)
             var normalized = dto.newStatus.Trim();
-
-            // Validación de estados permitidos (ajusta a tus estados reales)
-            var allowed = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
-            {
-                "Pendiente",
-                "Aprobada",
-                "Rechazada"
-            };
+            var allowed = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "Pendiente", "Aprobada", "Rechazada" };
 
             if (!allowed.Contains(normalized))
             {
-                return BadRequest(new ApiResponse<string>(
-                    false,
-                    "Estado inválido. Estados permitidos: Pendiente, Aprobada, Rechazada."
-                ));
+                return BadRequest(new ApiResponse<string>(false, "Estado inválido."));
             }
 
-            // Si no cambia, responde igual (opcional)
+            // Si el estado no cambia, salimos
             if (string.Equals(quote.Status, normalized, StringComparison.OrdinalIgnoreCase))
             {
                 return Ok(new ApiResponse<string>(true, $"La cotización ya está en estado '{quote.Status}'."));
             }
+
+            // ==============================================================================
+            //  LÓGICA DE GENERACIÓN DE PDF AL APROBAR
+            // ==============================================================================
+            if (normalized.Equals("Aprobada", StringComparison.OrdinalIgnoreCase))
+            {
+                try
+                {
+                    // Validamos que tengamos los datos necesarios
+                    if (quote.Purchase != null && quote.Purchase.RequestQuote != null)
+                    {
+                        // 1. Instanciamos tu servicio de PDF con los datos reales de la compra
+                        var pdfService = new QuoteServices(quote.Purchase, quote.Purchase.RequestQuote, _company);
+                        
+                        // 2. Generamos los bytes
+                        byte[] pdfBytes = pdfService.GeneratePdf();
+
+                        // 3. Definimos dónde guardar el registro (Ej: carpeta "Registros" en el servidor)
+                        string folderPath = Path.Combine(Directory.GetCurrentDirectory(), "wwwroot", "Registros", "Aprobadas");
+                        
+                        // Crear directorio si no existe
+                        if (!Directory.Exists(folderPath)) Directory.CreateDirectory(folderPath);
+
+                        // Nombre del archivo: Solicitud_NUMERO_IDCOTIZACION.pdf
+                        string fileName = $"Registro_{quote.Purchase.RequestQuote.Number}_Cot{quote.Id}.pdf";
+                        string fullPath = Path.Combine(folderPath, fileName);
+
+                        // 4. Guardamos el archivo físicamente
+                        await System.IO.File.WriteAllBytesAsync(fullPath, pdfBytes);
+
+                        // Opcional: Podrías guardar la ruta del archivo en la base de datos si tuvieras un campo "PdfPath"
+                        // quote.PdfPath = fullPath; 
+                    }
+                }
+                catch (Exception ex)
+                {
+                    // Loguear el error pero no detener el flujo principal, o retornar error según prefieras
+                    Console.WriteLine($"Error generando PDF de registro: {ex.Message}");
+                    // return StatusCode(500, new ApiResponse<string>(false, "Error al generar el PDF de respaldo."));
+                }
+            }
+            // ==============================================================================
 
             quote.Status = normalized;
 
@@ -173,13 +214,10 @@ namespace ByG_Backend.src.Controller
             }
             catch (DbUpdateException)
             {
-                return StatusCode(500, new ApiResponse<string>(
-                    false,
-                    "Error al actualizar el estado de la cotización"
-                ));
+                return StatusCode(500, new ApiResponse<string>(false, "Error al actualizar el estado en base de datos."));
             }
 
-            return Ok(new ApiResponse<string>(true, $"Estado actualizado a '{quote.Status}' correctamente"));
+            return Ok(new ApiResponse<string>(true, $"Estado actualizado a '{quote.Status}' y registro generado correctamente."));
         }
 
 
