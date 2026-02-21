@@ -24,6 +24,7 @@ namespace ByG_Backend.src.DTOs
         public string? PaymentTerms { get; set; }
         public string Currency { get; set; } = "CLP";
         public DateOnly? ExpectedDeliveryDate { get; set; }
+        public DateTime? DeliveryDeadline { get; set; }
         public string? ShippingAddress { get; set; }
         public string? ShippingMethod { get; set; }
         public string? Observations { get; set; }
