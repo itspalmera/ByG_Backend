@@ -28,11 +28,13 @@ namespace ByG_Backend.src.Services
         {
             var claims = new List<Claim>
             {
-                new Claim(ClaimTypes.NameIdentifier, user.Id),
+                //Usar ClaimTypes.NameIdentifier en vez de JwtRegisteredClaimNames.NameId
+                new Claim(ClaimTypes.NameIdentifier, user.Id), 
                 new Claim(JwtRegisteredClaimNames.Email, user.Email!),
             };
             foreach (var role in roles)
             {
+    
                 claims.Add(new Claim(ClaimTypes.Role, role));
             }
             

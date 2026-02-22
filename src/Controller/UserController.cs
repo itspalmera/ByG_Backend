@@ -46,79 +46,123 @@ namespace ByG_Backend.src.Controller
             [FromQuery] int pageSize = 10
         )
         {
-            // sanitizar paginación
-            if (pageNumber < 1) pageNumber = 1;
-            if (pageSize < 1) pageSize = 10;
-            if (pageSize > 100) pageSize = 100;
 
-            var query = _context.Users.AsNoTracking().AsQueryable();
-
-            // 1) Filtro por activo
-            if (isActive.HasValue)
+            Console.WriteLine("************ DIAGNÓSTICO DE IDENTIDAD ************");
+            Console.WriteLine($"Usuario Autenticado: {User.Identity?.IsAuthenticated}");
+            Console.WriteLine($"Nombre (Name): {User.Identity?.Name}");
+            Console.WriteLine("--- CLAIMS RECIBIDOS ---");
+            foreach (var claim in User.Claims)
             {
-                query = query.Where(u => u.IsActive == isActive.Value);
+                Console.WriteLine($"Tipo: '{claim.Type}' | Valor: '{claim.Value}'");
             }
+            Console.WriteLine($"¿Tiene rol 'Admin' según sistema?: {User.IsInRole("Admin")}");
+            Console.WriteLine("**************************************************");
 
 
-            if (registeredFrom.HasValue)
+            // --- ZONA DE DIAGNÓSTICO ---
+            Console.WriteLine("========================================");
+            Console.WriteLine($"--> RECIBIDA PETICIÓN GET /api/User");
+            Console.WriteLine($"--> Filtros: Active={isActive}, Search={searchTerm}");
+            // ----------------------------
+
+            try 
             {
-                query = query.Where(u => u.Registered >= registeredFrom.Value);
+                // sanitizar paginación
+                if (pageNumber < 1) pageNumber = 1;
+                if (pageSize < 1) pageSize = 10;
+                if (pageSize > 100) pageSize = 100;
+
+                var query = _context.Users.AsNoTracking().AsQueryable();
+
+                // LOG CANTIDAD TOTAL
+                var totalUsersInDb = await _context.Users.CountAsync();
+                Console.WriteLine($"--> Usuarios totales en la BD (sin filtros): {totalUsersInDb}");
+
+                // 1) Filtro por activo
+                if (isActive.HasValue)
+                {
+                    query = query.Where(u => u.IsActive == isActive.Value);
+                }
+
+
+                if (registeredFrom.HasValue)
+                {
+                    query = query.Where(u => u.Registered >= registeredFrom.Value);
+                }
+
+                if (registeredTo.HasValue)
+                {
+                    // opcional: incluir todo el día si te pasan solo fecha
+                    var to = registeredTo.Value;
+                    query = query.Where(u => u.Registered <= to);
+                }
+
+                // 3) Search (email / username)
+                if (!string.IsNullOrWhiteSpace(searchTerm))
+                {
+                    var term = searchTerm.Trim().ToLower();
+                    query = query.Where(u =>
+                        (u.Email != null && u.Email.ToLower().Contains(term)) ||
+                        (u.UserName != null && u.UserName.ToLower().Contains(term)) ||
+                        (u.FirstName != null && u.FirstName.ToLower().Contains(term)) || // Agregamos nombre
+                        (u.LastName != null && u.LastName.ToLower().Contains(term))    // Agregamos apellido
+                    );
+                }
+
+                // LOG ANTES DE PAGINAR
+                var countAfterFilter = await query.CountAsync();
+                Console.WriteLine($"--> Usuarios tras aplicar filtros: {countAfterFilter}");
+
+                // 4) Ordenamiento simple
+                //    orderBy ejemplos:
+                //    - "email"
+                //    - "email:desc"
+                //    - "username"
+                //    - "createdAt:desc"
+                //    - "lastAccess"
+                var key = (orderBy ?? "createdAt:desc").Trim().ToLower();
+                var desc = key.EndsWith(":desc");
+                if (desc) key = key.Replace(":desc", "");
+
+                query = key switch
+                {
+                    "email" => desc ? query.OrderByDescending(u => u.Email) : query.OrderBy(u => u.Email),
+                    "username" => desc ? query.OrderByDescending(u => u.UserName) : query.OrderBy(u => u.UserName),
+                    "lastaccess" => desc ? query.OrderByDescending(u => u.LastAccess) : query.OrderBy(u => u.LastAccess),
+                    "createdat" => desc ? query.OrderByDescending(u => u.Registered) : query.OrderBy(u => u.Registered),
+                    _ => query.OrderByDescending(u => u.Registered)
+                };
+
+                // (opcional) total para que el frontend sepa
+                var total = await query.CountAsync();
+
+                // 5) Paginación
+                var users = await query
+                    .Skip((pageNumber - 1) * pageSize)
+                    .Take(pageSize)
+                    .ToListAsync();
+
+                Console.WriteLine($"--> Usuarios recuperados en esta página: {users.Count}");
+                
+                // VERIFICAR DATOS DEL PRIMER USUARIO (Si existe)
+                if(users.Count > 0) {
+                    Console.WriteLine($"--> Ejemplo User 1: {users[0].Email} - Rol: {users[0].Role}");
+                }
+
+                var dtos = users.Select(UserMapper.UserToUserDto).ToList();
+
+                return Ok(new ApiResponse<IEnumerable<UserDto>>(
+                    true,
+                    $"Usuarios obtenidos correctamente. Total: {countAfterFilter}",
+                    dtos
+                ));
             }
-
-            if (registeredTo.HasValue)
+            catch (Exception ex)
             {
-                // opcional: incluir todo el día si te pasan solo fecha
-                var to = registeredTo.Value;
-                query = query.Where(u => u.Registered <= to);
+                Console.WriteLine($"--> ERROR CRÍTICO EN GET ALL: {ex.Message}");
+                Console.WriteLine(ex.StackTrace);
+                return StatusCode(500, new ApiResponse<string>(false, "Error interno: " + ex.Message));
             }
-
-            // 3) Search (email / username)
-            if (!string.IsNullOrWhiteSpace(searchTerm))
-            {
-                var term = searchTerm.Trim().ToLower();
-
-                query = query.Where(u =>
-                    (u.Email != null && u.Email.ToLower().Contains(term)) ||
-                    (u.UserName != null && u.UserName.ToLower().Contains(term))
-                );
-            }
-
-            // 4) Ordenamiento simple
-            //    orderBy ejemplos:
-            //    - "email"
-            //    - "email:desc"
-            //    - "username"
-            //    - "createdAt:desc"
-            //    - "lastAccess"
-            var key = (orderBy ?? "createdAt:desc").Trim().ToLower();
-            var desc = key.EndsWith(":desc");
-            if (desc) key = key.Replace(":desc", "");
-
-            query = key switch
-            {
-                "email" => desc ? query.OrderByDescending(u => u.Email) : query.OrderBy(u => u.Email),
-                "username" => desc ? query.OrderByDescending(u => u.UserName) : query.OrderBy(u => u.UserName),
-                "lastaccess" => desc ? query.OrderByDescending(u => u.LastAccess) : query.OrderBy(u => u.LastAccess),
-                "createdat" => desc ? query.OrderByDescending(u => u.Registered) : query.OrderBy(u => u.Registered),
-                _ => query.OrderByDescending(u => u.Registered)
-            };
-
-            // (opcional) total para que el frontend sepa
-            var total = await query.CountAsync();
-
-            // 5) Paginación
-            var users = await query
-                .Skip((pageNumber - 1) * pageSize)
-                .Take(pageSize)
-                .ToListAsync();
-
-            var dtos = users.Select(UserMapper.UserToUserDto).ToList();
-
-            return Ok(new ApiResponse<IEnumerable<UserDto>>(
-                true,
-                $"Usuarios obtenidos correctamente. Total: {total}",
-                dtos
-            ));
         }
 
         // =========================

@@ -5,7 +5,7 @@ using System.Threading.Tasks;
 
 namespace ByG_Backend.src.DTOs
 {
-    public class UpdateQuoteDto
+    public record UpdateQuoteDto
     {
         public string? Number { get; set; }
         public string? Status { get; set; }

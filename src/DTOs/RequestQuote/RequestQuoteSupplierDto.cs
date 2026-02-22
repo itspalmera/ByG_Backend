@@ -5,7 +5,7 @@ using System.Threading.Tasks;
 
 namespace ByG_Backend.src.DTOs
 {
-    public class RequestQuoteSupplierDto
+    public record RequestQuoteSupplierDto
     {
         public DateTime SentAt { get; set; }
         public int RequestQuoteId { get; set; }

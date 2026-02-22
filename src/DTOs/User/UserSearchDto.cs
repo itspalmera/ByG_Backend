@@ -5,7 +5,7 @@ using System.Threading.Tasks;
 
 namespace ByG_Backend.src.DTOs
 {
-    public class UserSearchDto
+    public record UserSearchDto
     {
         public string? email { get; set; }
         public string? name { get; set; }

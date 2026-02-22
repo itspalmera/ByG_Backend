@@ -6,7 +6,7 @@ using System.ComponentModel.DataAnnotations;
 
 namespace ByG_Backend.src.DTOs
 {
-    public class RegisterDto
+    public record RegisterDto
     {
 
         [Required(ErrorMessage = "El nombre es obligatorio.")]

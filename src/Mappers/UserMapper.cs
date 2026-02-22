@@ -51,7 +51,7 @@ namespace ByG_Backend.src.Mappers
 
 
 
-        public static AuthenticatedUserDto UserToAuthenticatedDto(User user, string token) =>
+        public static AuthenticatedUserDto UserToAuthenticatedDto(User user, string token, string role) =>
         new()
         {
             FirstName = user.FirstName,
@@ -59,8 +59,10 @@ namespace ByG_Backend.src.Mappers
             Email = user.Email ?? string.Empty,
             Phone = user.PhoneNumber ?? string.Empty,
             Token = token,
+            Role = role,
             IsActive = user.IsActive,
-            Registered = user.Registered
+            Registered = user.Registered,
+            LastAccess = user.LastAccess
         };
 
 

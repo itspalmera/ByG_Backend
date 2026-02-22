@@ -7,7 +7,7 @@ using ByG_Backend.src.DTOs;
 
 namespace ByG_Backend.src.DTOs
 {
-    public class RequestQuoteDto
+    public record RequestQuoteDto
     {
         public string Number { get; set; } = null!;
 
