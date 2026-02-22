@@ -11,8 +11,12 @@ using Resend;
 using ByG_Backend.src.Repository;
 using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
+using QuestPDF.Infrastructure;
+using ByG_Backend.src.Options;
 
 var builder = WebApplication.CreateBuilder(args);
+
+QuestPDF.Settings.License = LicenseType.Community;
 
 // Add services to the container.
 builder.Services.AddOpenApi();
@@ -93,6 +97,8 @@ builder.Services.AddCors(options =>
     });
 });
 
+builder.Services.Configure<CompanyInfoOptions>(builder.Configuration.GetSection("CompanyInfo"));
+
 var app = builder.Build();
 
 // ==========================================
@@ -124,6 +130,8 @@ using (var scope = app.Services.CreateScope())
         Console.WriteLine($"Error durante el inicio y sembrado de datos: {ex.Message}");
     }
 }
+
+
 // ==========================================
 
 // Configure the HTTP request pipeline.
