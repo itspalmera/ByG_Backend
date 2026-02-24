@@ -133,5 +133,34 @@ namespace ByG_Backend.src.Controller
             // 3. Generas y retornas el PDF
             return documento.GeneratePdf(); 
         }
+
+
+
+
+        // GET: /api/request/{id}/pdf
+        [HttpGet("{id:int}/pdf")]
+        public async Task<IActionResult> DownloadRequestQuotePdf(int id)
+        {
+            var rq = await _context.RequestQuotes
+                .Include(r => r.Purchase)
+                    .ThenInclude(p => p.PurchaseItems)
+                .AsNoTracking()
+                .FirstOrDefaultAsync(r => r.Id == id);
+
+            if (rq == null)
+                return NotFound(new ApiResponse<string>(false, "Solicitud no encontrada"));
+
+            if (rq.Purchase == null)
+                return BadRequest(new ApiResponse<string>(false, "La solicitud no tiene compra asociada"));
+
+            // Asegura que hay items
+            if (rq.Purchase.PurchaseItems == null || rq.Purchase.PurchaseItems.Count == 0)
+                return BadRequest(new ApiResponse<string>(false, "La compra no tiene ítems registrados"));
+
+            var pdf = new QuoteServices(rq.Purchase, rq, _company).GeneratePdf();
+
+            var fileName = $"Solicitud_{rq.Number}.pdf";
+            return File(pdf, "application/pdf", fileName);
+        }
     }
 }

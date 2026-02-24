@@ -9,6 +9,7 @@ namespace ByG_Backend.src.DTOs
 {
     public record RequestQuoteDto
     {
+        public int Id { get; set; }
         public string Number { get; set; } = null!;
 
         public string Status { get; set; }

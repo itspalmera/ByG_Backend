@@ -25,18 +25,10 @@ namespace ByG_Backend.src.Mappers
                 item.Unit, item.Size, item.Quantity
             )).ToList() ?? new List<PurchaseItemDto>(),
 
-            // === AQUÍ ESTÁ LA MAGIA ===
-            // En lugar de solo true/false, mapeamos el objeto entero si existe
-            RequestQuote: purchase.RequestQuote != null ? new RequestQuoteDto
-            {
-                Number = purchase.RequestQuote.Number,
-                Status = purchase.RequestQuote.Status,
-                CreatedAt = purchase.RequestQuote.CreatedAt,
-                // Mapeamos los proveedores para el contador del frontend
-                RequestQuoteSuppliers = purchase.RequestQuote.RequestQuoteSuppliers
-                    .Select(s => new RequestQuoteSupplierDto { SupplierId = s.SupplierId })
-                    .ToList()
-            } : null,
+
+            RequestQuote: purchase.RequestQuote != null 
+            ? RequestQuoteMapper.RequestQuoteToRequestQuoteDto(purchase.RequestQuote) 
+            : null,
 
             HasPurchaseOrder: purchase.PurchaseOrder != null
         );
