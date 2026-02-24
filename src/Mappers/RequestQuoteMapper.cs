@@ -13,6 +13,7 @@ namespace ByG_Backend.src.Mappers
         {
             return new RequestQuoteDto
             {
+                Id = requestQuote.Id,
                 Number = requestQuote.Number,
                 Status = requestQuote.Status,
                 CreatedAt = requestQuote.CreatedAt,

@@ -10,6 +10,7 @@ namespace ByG_Backend.src.Mappers
             // Mapeamos la Compra y sus Items
             var compra = new Purchase
             {
+                Id = dto.Compra.IdPurchase,
                 PurchaseNumber = dto.Compra.PurchaseNumber,
                 ProjectName = dto.Compra.ProjectName,
                 Requester = dto.Compra.Requester,
@@ -24,6 +25,7 @@ namespace ByG_Backend.src.Mappers
             // Mapeamos la Solicitud
             var solicitud = new RequestQuote
             {
+                Id = dto.Solicitud.Id,
                 Number = dto.Solicitud.Number,
                 Status = dto.Solicitud.Status
             };

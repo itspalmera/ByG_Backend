@@ -7,6 +7,7 @@ namespace ByG_Backend.src.DTOs
 {
     public class PdfPurchaseData
     {
+        public int IdPurchase { get; set; }
         public string PurchaseNumber { get; set; } = null!;
         public string ProjectName { get; set; } = null!;
         public string Requester { get; set; } = null!;
