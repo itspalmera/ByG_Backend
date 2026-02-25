@@ -24,8 +24,10 @@ namespace ByG_Backend.src.Data
         public DbSet<PurchaseOrder> PurchaseOrder { get; set; } = null!;
 
         public DbSet<Supplier> Supplier { get; set; } = null!;
-
         
+        public DbSet<PasswordResetToken> PasswordResetTokens { get; set; } = null!;
+
+        public DbSet<User> User { get; set; } = null!;
 
         //Carga identity
         protected override void OnModelCreating(ModelBuilder builder)

@@ -11,6 +11,7 @@ appsettings.Development.json
 .db
 *.db
 appsettings.json
+appsettings.json
 
 # User-specific files
 *.rsuser
