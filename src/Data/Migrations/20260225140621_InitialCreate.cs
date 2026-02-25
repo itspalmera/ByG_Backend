@@ -6,7 +6,7 @@ using Microsoft.EntityFrameworkCore.Migrations;
 namespace ByG_Backend.src.Data.Migrations
 {
     /// <inheritdoc />
-    public partial class firstmigration : Migration
+    public partial class InitialCreate : Migration
     {
         /// <inheritdoc />
         protected override void Up(MigrationBuilder migrationBuilder)
@@ -261,6 +261,7 @@ namespace ByG_Backend.src.Data.Migrations
                     Status = table.Column<string>(type: "TEXT", nullable: false),
                     Date = table.Column<DateTime>(type: "TEXT", nullable: false),
                     TotalPrice = table.Column<decimal>(type: "TEXT", nullable: true),
+                    Observations = table.Column<string>(type: "TEXT", nullable: true),
                     PurchaseId = table.Column<int>(type: "INTEGER", nullable: true),
                     SupplierId = table.Column<int>(type: "INTEGER", nullable: true)
                 },
@@ -314,26 +315,26 @@ namespace ByG_Backend.src.Data.Migrations
                         .Annotation("Sqlite:Autoincrement", true),
                     OrderNumber = table.Column<string>(type: "TEXT", nullable: false),
                     Date = table.Column<DateTime>(type: "TEXT", nullable: false),
-                    Status = table.Column<string>(type: "TEXT", nullable: false),
+                    CostCenter = table.Column<string>(type: "TEXT", nullable: true),
                     Observations = table.Column<string>(type: "TEXT", nullable: true),
-                    PaymentTerms = table.Column<string>(type: "TEXT", nullable: true),
+                    Status = table.Column<string>(type: "TEXT", nullable: false),
                     PaymentForm = table.Column<string>(type: "TEXT", nullable: true),
+                    PaymentTerms = table.Column<string>(type: "TEXT", nullable: true),
                     Currency = table.Column<string>(type: "TEXT", nullable: false),
                     ExpectedDeliveryDate = table.Column<DateOnly>(type: "TEXT", nullable: true),
-                    ShippingAderess = table.Column<string>(type: "TEXT", nullable: true),
-                    ShippingMethod = table.Column<string>(type: "TEXT", nullable: true),
                     DeliveryDeadline = table.Column<DateTime>(type: "TEXT", nullable: true),
-                    CostCenter = table.Column<string>(type: "TEXT", nullable: true),
-                    SubTotal = table.Column<decimal>(type: "TEXT", nullable: false),
+                    ShippingAddress = table.Column<string>(type: "TEXT", nullable: true),
+                    ShippingMethod = table.Column<string>(type: "TEXT", nullable: true),
                     Discount = table.Column<decimal>(type: "TEXT", nullable: false),
                     FreightCharge = table.Column<decimal>(type: "TEXT", nullable: false),
+                    SubTotal = table.Column<decimal>(type: "TEXT", nullable: false),
                     TaxExemptTotal = table.Column<decimal>(type: "TEXT", nullable: false),
                     TaxRate = table.Column<decimal>(type: "TEXT", nullable: false),
                     TaxAmount = table.Column<decimal>(type: "TEXT", nullable: false),
                     TotalAmount = table.Column<decimal>(type: "TEXT", nullable: false),
                     ApproverName = table.Column<string>(type: "TEXT", nullable: true),
-                    ApproverRole = table.Column<string>(type: "TEXT", nullable: true),
                     ApproverRut = table.Column<string>(type: "TEXT", nullable: true),
+                    ApproverRole = table.Column<string>(type: "TEXT", nullable: true),
                     SignedAt = table.Column<DateTime>(type: "TEXT", nullable: true),
                     PurchaseId = table.Column<int>(type: "INTEGER", nullable: false),
                     QuoteId = table.Column<int>(type: "INTEGER", nullable: false)

@@ -145,7 +145,7 @@ namespace ByG_Backend.src.Data.Migrations
                     b.Property<int>("QuoteId")
                         .HasColumnType("INTEGER");
 
-                    b.Property<string>("ShippingAderess")
+                    b.Property<string>("ShippingAddress")
                         .HasColumnType("TEXT");
 
                     b.Property<string>("ShippingMethod")
