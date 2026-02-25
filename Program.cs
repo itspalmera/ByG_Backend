@@ -66,9 +66,10 @@ builder.Services.AddAuthentication(options =>
 builder.Services.AddOptions();
 
 // Configurar Resend para envío de emails
+// Busca esta sección en tu Program.cs
 builder.Services.Configure<ResendClientOptions>(options =>
 {
-    options.ApiToken = builder.Configuration["Resend:ApiKey"]!;
+    options.ApiToken = builder.Configuration["ResendAPIkey"];
 });
 builder.Services.AddHttpClient<IResend, ResendClient>();
 
