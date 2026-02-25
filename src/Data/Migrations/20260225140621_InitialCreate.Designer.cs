@@ -11,8 +11,8 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 namespace ByG_Backend.src.Data.Migrations
 {
     [DbContext(typeof(DataContext))]
-    [Migration("20260219024352_AddObservationsToQuote")]
-    partial class AddObservationsToQuote
+    [Migration("20260225140621_InitialCreate")]
+    partial class InitialCreate
     {
         /// <inheritdoc />
         protected override void BuildTargetModel(ModelBuilder modelBuilder)
@@ -148,7 +148,7 @@ namespace ByG_Backend.src.Data.Migrations
                     b.Property<int>("QuoteId")
                         .HasColumnType("INTEGER");
 
-                    b.Property<string>("ShippingAderess")
+                    b.Property<string>("ShippingAddress")
                         .HasColumnType("TEXT");
 
                     b.Property<string>("ShippingMethod")
