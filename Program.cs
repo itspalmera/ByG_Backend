@@ -8,7 +8,6 @@ using ByG_Backend.src.Services;
 using ByG_Backend.src.Data; // Asegúrate de que este namespace incluya tu DataSeeder
 using ByG_Backend.src.Models;
 using Resend;
-using ByG_Backend.src.Repository;
 using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using QuestPDF.Infrastructure;
@@ -81,6 +80,7 @@ builder.Services.AddDbContext<DataContext>(options =>
 builder.Services.AddControllers();
 builder.Services.AddScoped<ITokenServices, TokenService>();
 builder.Services.AddScoped<IUserRepository, UserRepository>();
+builder.Services.AddScoped<IEmailService, EmailService>();
 
 // CORS: Configuración flexible
 builder.Services.AddCors(options =>

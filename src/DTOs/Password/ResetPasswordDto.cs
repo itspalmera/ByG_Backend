@@ -9,7 +9,7 @@ namespace ByG_Backend.src.DTOs
     public class ResetPasswordDto
     {
         [Required]
-        public string Token { get; set; } = string.Empty;
+        public string Code { get; set; } = string.Empty;
 
         [Required]
         [EmailAddress]
@@ -19,6 +19,8 @@ namespace ByG_Backend.src.DTOs
         [StringLength(100, MinimumLength = 8, ErrorMessage = "La clave debe tener al menos 8 caracteres")]
         public string NewPassword { get; set; } = string.Empty;
 
+
+        [Required]
         [Compare("NewPassword", ErrorMessage = "Las contraseñas no coinciden")]
         public string ConfirmPassword { get; set; } = string.Empty;
     }

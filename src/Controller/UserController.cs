@@ -23,13 +23,15 @@ namespace ByG_Backend.src.Controller
     [ApiController]
     [Route("api/[controller]")]
     public class UserController(
-        ILogger<UserController> logger, DataContext context, UserManager<User> userManager, IResend resend, IUserRepository repository) : ControllerBase
+        ILogger<UserController> logger, DataContext context, UserManager<User> userManager, IResend resend, IUserRepository repository, IEmailService emailService) : ControllerBase
     {
         private readonly ILogger<UserController> _logger = logger;
         private readonly DataContext _context = context;
         private readonly UserManager<User> _userManager = userManager;
         private readonly IResend _resend = resend;
+        private readonly IEmailService _emailService = emailService;
         private readonly IUserRepository _repository = repository;
+
 
         // =========================
         // GET ALL (Admin) + filtros inline
@@ -271,36 +273,78 @@ namespace ByG_Backend.src.Controller
             return Ok(new ApiResponse<UserDto>(true, "Perfil actualizado correctamente", UserMapper.UserToUserDto(user)));
         }
 
-        /**
+        
         // =========================
-        // CHANGE PASSWORD (User)
+        // Send Verification Code
         // =========================
-        [Authorize(Roles = "User")]
-        [HttpPost("forgot-password")]
+        [HttpPost("ChangePassword")]
         public async Task<IActionResult> ForgotPassword([FromBody] ForgotPasswordDto dto)
         {
-            // El framework valida automáticamente el Email antes de entrar aquí
-            var result = await _repository.SendPasswordResetEmailAsync(dto.Email);
-            
-            // Siempre devolvemos Ok por seguridad (evita enumeración de usuarios)
-            return Ok(new ApiResponse<string>(true, "Si el correo existe, se ha enviado un enlace de recuperación."));
+            // 1. Validar que el usuario existe en tu sistema
+            var user = await _context.User.FirstOrDefaultAsync(u => u.Email == dto.Email);
+            if (user == null) return NotFound("El correo no está registrado.");
+
+            // 2. Generar código aleatorio
+            string code = new Random().Next(100000, 999999).ToString();
+
+            // 3. Guardar en tu tabla de "PasswordResets" o similar
+            // Es vital guardar la hora actual + los 3 minutos de tu config
+            var resetToken = new PasswordResetToken {
+                Email = dto.Email,
+                Code = code,
+                ExpiryDate = DateTime.UtcNow.AddMinutes(3) 
+            };
+            _context.PasswordResetTokens.Add(resetToken);
+            await _context.SaveChangesAsync();
+
+            // 4. Enviar el correo
+            await _emailService.SendVerificationCodeAsync(dto.Email, code);
+
+            return Ok("Código enviado con éxito.");
         }
 
-        //[Authorize(Roles = "User")]
-        [HttpPost("reset-password")]
+
+        [HttpPost("ResetPassword")]
         public async Task<IActionResult> ResetPassword([FromBody] ResetPasswordDto dto)
         {
-            var result = await _repository.ResetPasswordAsync(dto);
-            
+            // 1. Buscar el token en tu tabla manual (ByG)
+            var resetToken = await _context.PasswordResetTokens
+                .Where(t => t.Email == dto.Email && t.Code == dto.Code && !t.IsUsed)
+                .OrderByDescending(t => t.ExpiryDate)
+                .FirstOrDefaultAsync();
+
+            // 2. Validaciones de tu código manual
+            if (resetToken == null)
+                return BadRequest("Código de verificación inválido.");
+
+            if (resetToken.ExpiryDate < DateTime.UtcNow)
+                return BadRequest("El código ha expirado.");
+
+            // 3. Buscar al usuario mediante UserManager (más seguro que _context.User)
+            var user = await _userManager.FindByEmailAsync(dto.Email);
+            if (user == null) 
+                return NotFound("Usuario no encontrado.");
+
+            // 4. CAMBIO CLAVE CON IDENTITY
+            // Generamos un token de sistema para bypass el requisito de "password anterior"
+            var token = await _userManager.GeneratePasswordResetTokenAsync(user);
+            var result = await _userManager.ResetPasswordAsync(user, token, dto.NewPassword);
+
             if (!result.Succeeded)
-                return BadRequest(new ApiResponse<string>(false, "Error al restablecer", null, 
-                    result.Errors.Select(e => e.Description).ToList()));
+            {
+                return BadRequest(new { 
+                    Message = "Error al cambiar la contraseña", 
+                    Errors = result.Errors.Select(e => e.Description) 
+                });
+            }
 
-            return Ok(new ApiResponse<string>(true, "Contraseña actualizada con éxito."));
-        
+            // 5. Marcar como usado y guardar cambios
+            resetToken.IsUsed = true;
+            _context.PasswordResetTokens.Update(resetToken);
+            await _context.SaveChangesAsync();
+
+            return Ok("Contraseña actualizada con éxito.");
         }
-        **/
-
 
         [Authorize(Roles = "Admin")]
         [HttpPatch("changeRole")]
