@@ -178,7 +178,7 @@ namespace ByG_Backend.src.Data
 
             // =========================================================================
             // ESCENARIO 4: OC GENERADA PERO ESPERANDO APROBACIÓN (FORMALIZADA)
-            // Estado Purchase: "OC autorizada" (OrderAuthorized)
+            // Estado Purchase: "OC esperando aprobación" (OrderAuthorized)
             // Quote Ganadora: "Aprobada", Quote Perdedora: "Rechazada"
             // PurchaseOrder: "Esperando Aprobación" (Editable)
             // =========================================================================
@@ -186,7 +186,7 @@ namespace ByG_Backend.src.Data
             {
                 PurchaseNumber = "REQ-2026-004",
                 ProjectName = "Remodelación Baños",
-                Status = "OC autorizada", // PurchaseStatuses.OrderAuthorized
+                Status = "OC esperando aprobación", // PurchaseStatuses.OrderWaitingApproval
                 RequestDate = DateTime.UtcNow.AddDays(-10),
                 UpdatedAt = DateTime.UtcNow.AddHours(-2),
                 Requester = "Arquitecto",

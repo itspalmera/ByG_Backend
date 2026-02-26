@@ -7,7 +7,7 @@ namespace ByG_Backend.src.Helpers
         public const string WaitingReview = "Esperando revisión";
         
 
-        public const string OrderAuthorized = "OC autorizada"; // Cuando se crea la OC (pero no se ha enviado)
+        public const string OrderAuthorized = "OC esperando aprobación"; // Cuando se crea la OC (pero no se ha enviado)
         public const string OrderSent = "OC enviada";          // Cuando se aprueba la OC
         public const string Rejected = "Rechazada";
     }
