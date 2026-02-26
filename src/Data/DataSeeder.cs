@@ -2,7 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using ByG_Backend.src.Data;
-using ByG_Backend.src.Helpers;
+using ByG_Backend.src.Helpers; // Asegúrate de tener los Helpers de estados aquí
 using ByG_Backend.src.Models;
 
 namespace ByG_Backend.src.Data
@@ -11,12 +11,11 @@ namespace ByG_Backend.src.Data
     {
         public static void Seed(DataContext context)
         {
-            // Evitar duplicar datos si ya existen compras (para no ensuciar la BD en cada reinicio)
+            // Evitar duplicar datos si ya existen compras
             if (context.Purchase.Any()) return;
 
             // =========================================================================
             // 1. CREAR PROVEEDORES (SUPPLIERS)
-            // Estos son los actores que enviarán las cotizaciones.
             // =========================================================================
             var suppliers = new List<Supplier>
             {
@@ -28,176 +27,311 @@ namespace ByG_Backend.src.Data
             };
 
             context.Supplier.AddRange(suppliers);
-            context.SaveChanges(); // Guardamos para generar los IDs reales en la BD
+            context.SaveChanges();
 
-            // Recuperamos las entidades con sus IDs generados para relacionarlas correctamente abajo
+            // Referencias para usar abajo
             var supElRoble = context.Supplier.First(s => s.BusinessName.Contains("El Roble"));
             var supSodimac = context.Supplier.First(s => s.BusinessName.Contains("Sodimac"));
             var supSeguridad = context.Supplier.First(s => s.BusinessName.Contains("Seguridad Total"));
+            var supFerreteria = context.Supplier.First(s => s.BusinessName.Contains("Ferretería"));
 
             // =========================================================================
-            // 2. ESCENARIO A: COMPRA DE MATERIALES (CON COTIZACIONES CARGADAS)
-            // Estado: WaitingReview (El gestor ya subió cotizaciones y espera al autorizador)
+            // ESCENARIO 1: SOLICITUD RECIÉN LLEGADA (INICIO)
+            // Estado Purchase: "Solicitud recibida"
+            // Estado RequestQuote: "Pendiente" (Borrador)
             // =========================================================================
-            
-            // 2.1 Crear la Necesidad (Purchase) con sus Items
-            var purchaseA = new Purchase
+            var purchase1 = new Purchase
             {
                 PurchaseNumber = "REQ-2026-001",
-                ProjectName = "Edificio Centro Santiago",
-                Status = PurchaseStatuses.WaitingReview, // Estado avanzado
-                RequestDate = DateTime.UtcNow.AddDays(-5),
-                Requester = "Ingeniero Residente",
-                Observations = "Materiales urgentes para obra gruesa piso 1",
+                ProjectName = "Oficina Central",
+                Status = "Solicitud recibida", // PurchaseStatuses.Received
+                RequestDate = DateTime.UtcNow,
+                Requester = "Secretaría",
+                Observations = "Insumos mensuales de oficina",
                 PurchaseItems = new List<PurchaseItem>
                 {
-                    // Estos son los productos "Padre" que se solicitan
-                    new PurchaseItem { Name = "Cemento Polpaico", BrandModel = "Especial", Unit = "Saco", Quantity = 100, Description = "Saco de 25kg" },
-                    new PurchaseItem { Name = "Arena Rubia", BrandModel = "N/A", Unit = "M3", Quantity = 10, Description = "Arena limpia" },
-                    new PurchaseItem { Name = "Ladrillo Fiscal", BrandModel = "Standard", Unit = "Unidad", Quantity = 500, Description = "7x14x28" }
+                    new PurchaseItem { Name = "Resma Carta", Unit = "Unidad", Quantity = 50, BrandModel = "HP" },
+                    new PurchaseItem { Name = "Toner Impresora", Unit = "Unidad", Quantity = 2, Description = "TN-1060" }
                 }
             };
-
-            context.Purchase.Add(purchaseA);
-            context.SaveChanges(); // Guardar para obtener IDs de PurchaseItems vitales para vincular la cotización
-
-            // 2.2 Crear el registro de que se enviaron correos (RequestQuote)
-            var requestQuoteA = new RequestQuote
-            {
-                PurchaseId = purchaseA.Id,
-                Number = "RFQ-2026-001",
-                Status = "Enviada",
-                CreatedAt = purchaseA.RequestDate,
-                SentAt = purchaseA.RequestDate.AddHours(2)
-            };
-            context.RequestQuotes.Add(requestQuoteA);
+            context.Purchase.Add(purchase1);
             context.SaveChanges();
 
-            // Relacionar a qué proveedores se les envió el correo
-            context.RequestQuoteSuppliers.AddRange(
-                new RequestQuoteSupplier { RequestQuoteId = requestQuoteA.Id, SupplierId = supElRoble.Id, SentAt = DateTime.UtcNow },
-                new RequestQuoteSupplier { RequestQuoteId = requestQuoteA.Id, SupplierId = supSodimac.Id, SentAt = DateTime.UtcNow }
-            );
-
-            // 2.3 CREAR COTIZACIONES (QUOTES)
-            // Aquí aseguramos que cada cotización tenga un Proveedor y sus precios enlazados al item original.
-            
-            // Recuperamos los items originales de la compra para obtener sus IDs
-            var itemsA = context.PurchaseItem.Where(x => x.PurchaseId == purchaseA.Id).ToList();
-            var itemCemento = itemsA.First(x => x.Name.Contains("Cemento"));
-            var itemArena = itemsA.First(x => x.Name.Contains("Arena"));
-            var itemLadrillo = itemsA.First(x => x.Name.Contains("Ladrillo"));
-
-            // --- Cotización 1: El Roble ---
-            var quote1 = new Quote
+            context.RequestQuotes.Add(new RequestQuote
             {
-                PurchaseId = purchaseA.Id,
-                SupplierId = supElRoble.Id, // <--- ¡AQUÍ! Asignación obligatoria del proveedor
-                Number = "COT-ROBLE-001",
-                Status = "Pendiente", 
-                Date = DateTime.UtcNow.AddDays(-2),
-                QuoteItems = new List<QuoteItem>
+                PurchaseId = purchase1.Id,
+                Number = "RFQ-2026-001",
+                Status = "Pendiente",
+                CreatedAt = DateTime.UtcNow
+            });
+            context.SaveChanges();
+
+            // =========================================================================
+            // ESCENARIO 2: SOLICITUD ENVIADA A PROVEEDORES (ESPERANDO RESPUESTAS)
+            // Estado Purchase: "Solicitud de cotización enviada"
+            // Estado RequestQuote: "Enviada"
+            // Sin Quotes cargadas aún.
+            // =========================================================================
+            var purchase2 = new Purchase
+            {
+                PurchaseNumber = "REQ-2026-002",
+                ProjectName = "Faena Minera Norte",
+                Status = "Solicitud de cotización enviada", // PurchaseStatuses.QuoteSent
+                RequestDate = DateTime.UtcNow.AddDays(-2),
+                Requester = "Jefe de Prevención",
+                Observations = "EPP Urgente para nuevos ingresos",
+                PurchaseItems = new List<PurchaseItem>
                 {
-                    // Enlazamos precio con el ID del producto solicitado (PurchaseItemId)
-                    new QuoteItem { Name = "Cemento Polpaico", Unit = "Saco", Quantity = 100, UnitPrice = 4500, TotalPrice = 450000, PurchaseItemId = itemCemento.Id },
-                    new QuoteItem { Name = "Arena Rubia", Unit = "M3", Quantity = 10, UnitPrice = 18000, TotalPrice = 180000, PurchaseItemId = itemArena.Id },
-                    new QuoteItem { Name = "Ladrillo Fiscal", Unit = "Unidad", Quantity = 500, UnitPrice = 350, TotalPrice = 175000, PurchaseItemId = itemLadrillo.Id }
+                    new PurchaseItem { Name = "Casco Seguridad", Unit = "Unidad", Quantity = 20, BrandModel = "MSA" },
+                    new PurchaseItem { Name = "Zapatos Seguridad", Unit = "Par", Quantity = 20, Description = "Tallas variadas" }
                 }
             };
-            quote1.TotalPrice = quote1.QuoteItems.Sum(x => x.TotalPrice);
+            context.Purchase.Add(purchase2);
+            context.SaveChanges();
 
-            // --- Cotización 2: Sodimac ---
-            var quote2 = new Quote
+            var rq2 = new RequestQuote
             {
-                PurchaseId = purchaseA.Id,
-                SupplierId = supSodimac.Id, // <--- ¡AQUÍ! Asignación obligatoria del proveedor
-                Number = "COT-SOD-999",
+                PurchaseId = purchase2.Id,
+                Number = "RFQ-2026-002",
+                Status = "Enviada",
+                CreatedAt = DateTime.UtcNow.AddDays(-2),
+                SentAt = DateTime.UtcNow.AddDays(-2)
+            };
+            context.RequestQuotes.Add(rq2);
+            context.SaveChanges();
+
+            // Registramos que se le envió a Seguridad Total
+            context.RequestQuoteSuppliers.Add(new RequestQuoteSupplier 
+            { 
+                RequestQuoteId = rq2.Id, 
+                SupplierId = supSeguridad.Id, 
+                SentAt = DateTime.UtcNow.AddDays(-2) 
+            });
+            context.SaveChanges();
+
+            // =========================================================================
+            // ESCENARIO 3: EN EVALUACIÓN (CON COTIZACIONES RECIBIDAS)
+            // Estado Purchase: "Esperando revisión"
+            // Quotes: 2 cargadas en estado "Pendiente"
+            // =========================================================================
+            var purchase3 = new Purchase
+            {
+                PurchaseNumber = "REQ-2026-003",
+                ProjectName = "Edificio Centro Santiago",
+                Status = "Esperando revisión", // PurchaseStatuses.WaitingReview
+                RequestDate = DateTime.UtcNow.AddDays(-5),
+                Requester = "Ingeniero Residente",
+                Observations = "Materiales obra gruesa piso 1",
+                PurchaseItems = new List<PurchaseItem>
+                {
+                    new PurchaseItem { Name = "Cemento Polpaico", Unit = "Saco", Quantity = 100 },
+                    new PurchaseItem { Name = "Ladrillo Fiscal", Unit = "Unidad", Quantity = 500 }
+                }
+            };
+            context.Purchase.Add(purchase3);
+            context.SaveChanges();
+
+            // Creamos la RFQ
+            var rq3 = new RequestQuote { PurchaseId = purchase3.Id, Number = "RFQ-2026-003", Status = "Enviada", CreatedAt = purchase3.RequestDate, SentAt = purchase3.RequestDate };
+            context.RequestQuotes.Add(rq3);
+            context.SaveChanges();
+
+            // IDs de items para enlazar precios
+            var p3Items = context.PurchaseItem.Where(x => x.PurchaseId == purchase3.Id).ToList();
+            var itemCemento = p3Items.First(x => x.Name.Contains("Cemento"));
+            var itemLadrillo = p3Items.First(x => x.Name.Contains("Ladrillo"));
+
+            // Quote 1: El Roble (Pendiente)
+            var q3_1 = new Quote
+            {
+                PurchaseId = purchase3.Id,
+                SupplierId = supElRoble.Id,
+                Number = "COT-ROBLE-100",
                 Status = "Pendiente",
                 Date = DateTime.UtcNow.AddDays(-1),
                 QuoteItems = new List<QuoteItem>
                 {
-                    new QuoteItem { Name = "Cemento Melón", Unit = "Saco", Quantity = 100, UnitPrice = 4800, TotalPrice = 480000, PurchaseItemId = itemCemento.Id, Description = "Solo tenían Melón (Alternativo)" },
-                    new QuoteItem { Name = "Arena Rubia", Unit = "M3", Quantity = 10, UnitPrice = 17500, TotalPrice = 175000, PurchaseItemId = itemArena.Id },
+                    new QuoteItem { Name = "Cemento Polpaico", Unit = "Saco", Quantity = 100, UnitPrice = 4500, TotalPrice = 450000, PurchaseItemId = itemCemento.Id },
+                    new QuoteItem { Name = "Ladrillo Fiscal", Unit = "Unidad", Quantity = 500, UnitPrice = 350, TotalPrice = 175000, PurchaseItemId = itemLadrillo.Id }
+                }
+            };
+            q3_1.TotalPrice = q3_1.QuoteItems.Sum(x => x.TotalPrice);
+
+            // Quote 2: Sodimac (Pendiente)
+            var q3_2 = new Quote
+            {
+                PurchaseId = purchase3.Id,
+                SupplierId = supSodimac.Id,
+                Number = "COT-SOD-500",
+                Status = "Pendiente",
+                Date = DateTime.UtcNow.AddDays(-1),
+                QuoteItems = new List<QuoteItem>
+                {
+                    new QuoteItem { Name = "Cemento Melón", Unit = "Saco", Quantity = 100, UnitPrice = 4800, TotalPrice = 480000, PurchaseItemId = itemCemento.Id, Description = "Alternativa Melón" },
                     new QuoteItem { Name = "Ladrillo Fiscal", Unit = "Unidad", Quantity = 500, UnitPrice = 380, TotalPrice = 190000, PurchaseItemId = itemLadrillo.Id }
                 }
             };
-            quote2.TotalPrice = quote2.QuoteItems.Sum(x => x.TotalPrice);
+            q3_2.TotalPrice = q3_2.QuoteItems.Sum(x => x.TotalPrice);
 
-            context.Quotes.AddRange(quote1, quote2);
+            context.Quotes.AddRange(q3_1, q3_2);
+            context.SaveChanges();
 
             // =========================================================================
-            // 3. ESCENARIO B: COMPRA DE EPP (SOLO SOLICITUD ENVIADA)
-            // Estado: QuoteSent (Se enviaron correos, pero el Gestor aún no carga precios)
+            // ESCENARIO 4: OC GENERADA PERO ESPERANDO APROBACIÓN (FORMALIZADA)
+            // Estado Purchase: "OC autorizada" (OrderAuthorized)
+            // Quote Ganadora: "Aprobada", Quote Perdedora: "Rechazada"
+            // PurchaseOrder: "Esperando Aprobación" (Editable)
             // =========================================================================
-
-            var purchaseB = new Purchase
+            var purchase4 = new Purchase
             {
-                PurchaseNumber = "REQ-2026-002",
-                ProjectName = "Faena Minera Norte",
-                Status = PurchaseStatuses.QuoteSent,
-                RequestDate = DateTime.UtcNow.AddDays(-1),
-                Requester = "Jefe de Prevención",
-                Observations = "EPP para nuevos ingresos",
+                PurchaseNumber = "REQ-2026-004",
+                ProjectName = "Remodelación Baños",
+                Status = "OC autorizada", // PurchaseStatuses.OrderAuthorized
+                RequestDate = DateTime.UtcNow.AddDays(-10),
+                UpdatedAt = DateTime.UtcNow.AddHours(-2),
+                Requester = "Arquitecto",
                 PurchaseItems = new List<PurchaseItem>
                 {
-                    new PurchaseItem { Name = "Casco Seguridad", BrandModel = "MSA", Unit = "Unidad", Quantity = 20, Description = "Color Blanco tipo V-Gard" },
-                    new PurchaseItem { Name = "Lentes Seguridad", BrandModel = "3M", Unit = "Par", Quantity = 20, Description = "Spyder oscuros" },
-                    new PurchaseItem { Name = "Zapatos Seguridad", BrandModel = "Nazca", Unit = "Par", Quantity = 20, Description = "Tallas variadas" }
+                    new PurchaseItem { Name = "Cerámica Blanca", Unit = "M2", Quantity = 50 },
+                    new PurchaseItem { Name = "Fragüe", Unit = "Kg", Quantity = 10 }
                 }
             };
-
-            context.Purchase.Add(purchaseB);
+            context.Purchase.Add(purchase4);
             context.SaveChanges();
 
-            var requestQuoteB = new RequestQuote
+            var rq4 = new RequestQuote { PurchaseId = purchase4.Id, Number = "RFQ-2026-004", Status = "Enviada", CreatedAt = purchase4.RequestDate, SentAt = purchase4.RequestDate };
+            context.RequestQuotes.Add(rq4);
+            context.SaveChanges();
+
+            var p4Items = context.PurchaseItem.Where(x => x.PurchaseId == purchase4.Id).ToList();
+
+            // Quote Ganadora (Sodimac)
+            var q4_Winner = new Quote
             {
-                PurchaseId = purchaseB.Id,
-                Number = "RFQ-2026-002",
-                Status = "Enviada",
-                CreatedAt = DateTime.UtcNow,
-                SentAt = DateTime.UtcNow
+                PurchaseId = purchase4.Id,
+                SupplierId = supSodimac.Id,
+                Number = "COT-SOD-700",
+                Status = "Aprobada", // Aprobada
+                Date = DateTime.UtcNow.AddDays(-3),
+                QuoteItems = new List<QuoteItem>
+                {
+                    new QuoteItem { Name = "Cerámica", Quantity = 50, Unit = "M2", UnitPrice = 8000, TotalPrice = 400000, PurchaseItemId = p4Items[0].Id },
+                    new QuoteItem { Name = "Fragüe", Quantity = 10, Unit = "Kg", UnitPrice = 1500, TotalPrice = 15000, PurchaseItemId = p4Items[1].Id }
+                }
             };
-            context.RequestQuotes.Add(requestQuoteB);
+            q4_Winner.TotalPrice = 415000;
+
+            // Quote Perdedora (El Roble)
+            var q4_Loser = new Quote
+            {
+                PurchaseId = purchase4.Id,
+                SupplierId = supElRoble.Id,
+                Number = "COT-ROB-200",
+                Status = "Rechazada", // Rechazada
+                Date = DateTime.UtcNow.AddDays(-3),
+                TotalPrice = 450000
+            };
+
+            context.Quotes.AddRange(q4_Winner, q4_Loser);
             context.SaveChanges();
 
-            // Solo registramos que se le pidió a "Seguridad Total", pero aún no hay Quote creada
-            context.RequestQuoteSuppliers.Add(new RequestQuoteSupplier { RequestQuoteId = requestQuoteB.Id, SupplierId = supSeguridad.Id, SentAt = DateTime.UtcNow });
-
-
-            // =========================================================================
-            // 4. ESCENARIO C: COMPRA DE INSUMOS (NUEVA)
-            // Estado: Received (Nadie ha hecho nada aún)
-            // =========================================================================
-            
-            var purchaseC = new Purchase
+            // CREAR LA ORDEN DE COMPRA (ESTADO: ESPERANDO APROBACIÓN)
+            var po4 = new PurchaseOrder
             {
-                PurchaseNumber = "REQ-2026-003",
-                ProjectName = "Oficina Central",
-                Status = PurchaseStatuses.Received,
-                RequestDate = DateTime.UtcNow,
-                Requester = "Secretaría",
-                Observations = "Insumos mensuales",
+                PurchaseId = purchase4.Id,
+                QuoteId = q4_Winner.Id,
+                OrderNumber = "OC-2026-0001",
+                Date = DateTime.UtcNow.AddHours(-2),
+                Status = "Esperando Aprobación", // PurchaseOrderStatuses.WaitingApproval
+                
+                // Datos de formalización
+                CostCenter = "CC-REMODELACION-01",
+                PaymentForm = "Transferencia",
+                PaymentTerms = "30 días",
+                ShippingAddress = "Calle La Obra 555, Santiago",
+                ShippingMethod = "Despacho a obra",
+                Currency = "CLP",
+                
+                // Cálculos
+                SubTotal = 415000,
+                Discount = 0,
+                FreightCharge = 15000, // Flete agregado en formalización
+                TaxRate = 19,
+                TaxAmount = (415000 + 15000) * 0.19m, // 81700
+                TotalAmount = 430000 * 1.19m, // 511700
+
+                ApproverName = "Admin Inicial",
+                ApproverRole = "Gestor",
+                SignedAt = null // Aún no firmada
+            };
+            context.PurchaseOrder.Add(po4);
+            context.SaveChanges();
+
+
+            // =========================================================================
+            // ESCENARIO 5: OC FINALIZADA Y ENVIADA (CICLO COMPLETO)
+            // Estado Purchase: "OC enviada" (OrderSent)
+            // PurchaseOrder: "Enviada" (Firmada)
+            // =========================================================================
+            var purchase5 = new Purchase
+            {
+                PurchaseNumber = "REQ-2026-005",
+                ProjectName = "Mantención Maquinaria",
+                Status = "OC enviada", // PurchaseStatuses.OrderSent
+                RequestDate = DateTime.UtcNow.AddDays(-20),
+                UpdatedAt = DateTime.UtcNow.AddDays(-2),
+                Requester = "Jefe Taller",
                 PurchaseItems = new List<PurchaseItem>
                 {
-                    new PurchaseItem { Name = "Resma Carta", BrandModel = "HP", Unit = "Unidad", Quantity = 50 },
-                    new PurchaseItem { Name = "Toner Impresora", BrandModel = "Brother", Unit = "Unidad", Quantity = 2, Description = "TN-1060" }
+                    new PurchaseItem { Name = "Aceite Motor", Unit = "Litro", Quantity = 20 }
                 }
             };
-
-            context.Purchase.Add(purchaseC);
+            context.Purchase.Add(purchase5);
             context.SaveChanges();
 
-            // Solicitud creada automáticamente, pero en estado pendiente (borrador)
-            var requestQuoteC = new RequestQuote
+            var rq5 = new RequestQuote { PurchaseId = purchase5.Id, Number = "RFQ-2026-005", Status = "Cerrada", CreatedAt = purchase5.RequestDate, SentAt = purchase5.RequestDate };
+            context.RequestQuotes.Add(rq5);
+            context.SaveChanges();
+
+            var p5Item = context.PurchaseItem.First(x => x.PurchaseId == purchase5.Id);
+
+            var q5_Winner = new Quote
             {
-                PurchaseId = purchaseC.Id,
-                Number = "RFQ-2026-003",
-                Status = "Pendiente",
-                CreatedAt = DateTime.UtcNow
+                PurchaseId = purchase5.Id,
+                SupplierId = supFerreteria.Id,
+                Number = "COT-FER-900",
+                Status = "Aprobada",
+                TotalPrice = 100000,
+                QuoteItems = new List<QuoteItem> { new QuoteItem { Name = "Aceite Motor", Quantity = 20, Unit = "Litro", UnitPrice = 5000, TotalPrice = 100000, PurchaseItemId = p5Item.Id } }
             };
-            context.RequestQuotes.Add(requestQuoteC);
-            
-            // Guardamos todo lo pendiente
+            context.Quotes.Add(q5_Winner);
+            context.SaveChanges();
+
+            var po5 = new PurchaseOrder
+            {
+                PurchaseId = purchase5.Id,
+                QuoteId = q5_Winner.Id,
+                OrderNumber = "OC-2026-0002",
+                Date = DateTime.UtcNow.AddDays(-2),
+                Status = "Enviada", // PurchaseOrderStatuses.Sent
+                
+                CostCenter = "CC-MAQUINARIA",
+                PaymentForm = "Efectivo",
+                PaymentTerms = "Contra entrega",
+                ShippingAddress = "Taller Central",
+                ShippingMethod = "Retiro en tienda",
+                
+                SubTotal = 100000,
+                TaxRate = 19,
+                TaxAmount = 19000,
+                TotalAmount = 119000,
+
+                ApproverName = "Gerente Operaciones",
+                ApproverRole = "Gerencia",
+                ApproverRut = "11.222.333-K",
+                SignedAt = DateTime.UtcNow.AddDays(-2) // Firmada
+            };
+            context.PurchaseOrder.Add(po5);
             context.SaveChanges();
         }
     }
