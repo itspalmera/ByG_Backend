@@ -1,4 +1,4 @@
-namespace ByG_Backend.src.Helpers
+namespace ByG_Backend.src.RequestHelpers
 {
     public class PagedResponse<T>(List<T> items, int totalItems, int pageNumber, int pageSize)
     {

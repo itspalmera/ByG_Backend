@@ -8,7 +8,7 @@ namespace ByG_Backend.src.DTOs
         public int Id { get; set; }
         public string OrderNumber { get; set; } = null!;
         public string Status { get; set; } = null!;
-        public DateTime Date { get; set; }
+        public string Date { get; set; } = string.Empty;
         public string? CostCenter { get; set; } // Viene de Purchase o se ingresa manual
 
         // --- Referencias ---
@@ -24,7 +24,7 @@ namespace ByG_Backend.src.DTOs
         public string? PaymentTerms { get; set; }
         public string Currency { get; set; } = "CLP";
         public DateOnly? ExpectedDeliveryDate { get; set; }
-        public DateTime? DeliveryDeadline { get; set; }
+        public string? DeliveryDeadline { get; set; }
         public string? ShippingAddress { get; set; }
         public string? ShippingMethod { get; set; }
         public string? Observations { get; set; }
@@ -44,7 +44,7 @@ namespace ByG_Backend.src.DTOs
         // --- Aprobación ---
         public string? ApproverName { get; set; }
         public string? ApproverRole { get; set; }
-        public DateTime? SignedAt { get; set; }
+        public string? SignedAt { get; set; }
     }
 
     // Sub-DTO para info del proveedor dentro de la OC

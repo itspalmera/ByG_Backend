@@ -2,17 +2,15 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.AspNetCore.Mvc;
 
 using ByG_Backend.src.Data;
 using ByG_Backend.src.DTOs;
 using ByG_Backend.src.Helpers;
+using ByG_Backend.src.RequestHelpers;
 using ByG_Backend.src.Mappers;
 using ByG_Backend.src.Models;
-using ByG_Backend.src.Interfaces;
-
-using Microsoft.EntityFrameworkCore;
-using Microsoft.AspNetCore.Mvc;
-using ByG_Backend.src.DTOs;
 
 namespace ByG_Backend.src.Controller
 {
@@ -20,277 +18,178 @@ namespace ByG_Backend.src.Controller
     [Route("api/[controller]")]
     public class SupplierController(DataContext context) : ControllerBase
     {
-        private readonly DataContext _context = context;
-
-        // VER Y BUSCAR (CON FILTROS Y ORDENAMIENTO PAGINADO)
-        [HttpGet] // GET /api/supplier
+        // ============================================================
+        // GET ALL - LISTADO PAGINADO (VERSION REFACTORIZADA)
+        // ============================================================
+        [HttpGet]
         public async Task<ActionResult<ApiResponse<PagedResponse<SupplierSummaryDto>>>> GetSuppliers([FromQuery] SupplierQueryParameters queryParams)
         {
-            var query = _context.Supplier.AsNoTracking().AsQueryable();
-
-            if (!string.IsNullOrWhiteSpace(queryParams.Search))
+            try
             {
-                var searchTerm = queryParams.Search.ToLower();
-                query = query.Where(s => 
-                    s.Rut.ToLower().Contains(searchTerm) || 
-                    s.BusinessName.ToLower().Contains(searchTerm) ||
-                    s.Email.ToLower().Contains(searchTerm)
-                );
-            }
+                var query = context.Supplier.AsNoTracking().AsQueryable();
 
-            if (queryParams.IsActive.HasValue)
-            {
-                query = query.Where(s => s.IsActive == queryParams.IsActive.Value);
-            }
+                // 1. FILTROS ESPECÍFICOS (Lógica de negocio)
+                if (queryParams.IsActive.HasValue)
+                {
+                    query = query.Where(s => s.IsActive == queryParams.IsActive.Value);
+                }
 
-            if (!string.IsNullOrWhiteSpace(queryParams.ProductCategory))
-            {
-                var category = queryParams.ProductCategory.ToLower();
-                query = query.Where(s => s.ProductCategories != null && s.ProductCategories.ToLower().Contains(category));
-            }
+                if (!string.IsNullOrWhiteSpace(queryParams.ProductCategory))
+                {
+                    var category = queryParams.ProductCategory.ToLower();
+                    query = query.Where(s => s.ProductCategories != null && s.ProductCategories.ToLower().Contains(category));
+                }
 
-            if (queryParams.StartDate.HasValue)
-            {
-                query = query.Where(s => s.RegisteredAt >= queryParams.StartDate.Value);
-            }
-            
-            if (queryParams.EndDate.HasValue)
-            {
-                var endDate = queryParams.EndDate.Value.AddDays(1).AddTicks(-1);
-                query = query.Where(s => s.RegisteredAt <= endDate);
-            }
+                if (queryParams.StartDate.HasValue)
+                {
+                    query = query.Where(s => s.RegisteredAt >= queryParams.StartDate.Value);
+                }
+                
+                if (queryParams.EndDate.HasValue)
+                {
+                    var endDate = queryParams.EndDate.Value.AddDays(1).AddTicks(-1);
+                    query = query.Where(s => s.RegisteredAt <= endDate);
+                }
 
-            query = queryParams.SortBy?.ToLower() switch
-            {
-                "name_asc" => query.OrderBy(s => s.BusinessName),
-                "name_desc" => query.OrderByDescending(s => s.BusinessName),
-                "date_asc" => query.OrderBy(s => s.RegisteredAt),
-                "date_desc" => query.OrderByDescending(s => s.RegisteredAt),
-                _ => query.OrderByDescending(s => s.RegisteredAt) 
-            };
+                // 2. BÚSQUEDA DINÁMICA (DRY)
+                // Busca coincidencias en RUT, Razón Social y Email automáticamente
+                query = query.ApplySearch(queryParams.Search, "Rut", "BusinessName", "Email");
 
-            // 1. Contar total antes de paginar
-            var totalItems = await query.CountAsync();
+                // 3. ORDENAMIENTO DINÁMICO (DRY)
+                // Por defecto ordena por fecha de registro descendente
+                query = query.ApplySorting(queryParams.SortBy, "RegisteredAt:desc");
 
-            // 2. Paginar y Proyectar
-            var suppliers = await query
-                .Skip((queryParams.PageNumber - 1) * queryParams.PageSize)
-                .Take(queryParams.PageSize)
-                .Select(s => new SupplierSummaryDto(
+                // 4. PAGINACIÓN GENÉRICA
+                var pagedResult = await query.ToPagedResponseAsync(queryParams.PageNumber, queryParams.PageSize);
+
+                // 5. MAPEO MANUAL A DTO (Items -> SummaryDto)
+                var dtos = pagedResult.Items.Select(s => new SupplierSummaryDto(
                     s.Id,
                     s.Rut,
                     s.BusinessName,
                     s.Email,
                     s.ProductCategories,
                     s.IsActive
-                ))
-                .ToListAsync();
+                )).ToList();
 
-            // 3. Empaquetar
-            var pagedData = new PagedResponse<SupplierSummaryDto>(suppliers, totalItems, queryParams.PageNumber, queryParams.PageSize);
+                var response = new PagedResponse<SupplierSummaryDto>(
+                    dtos, 
+                    pagedResult.TotalItems, 
+                    pagedResult.PageNumber, 
+                    pagedResult.PageSize
+                );
 
-            return Ok(new ApiResponse<PagedResponse<SupplierSummaryDto>>(
-                success: true,
-                message: "Listado de proveedores obtenido exitosamente.",
-                data: pagedData
-            ));
+                return Ok(new ApiResponse<PagedResponse<SupplierSummaryDto>>(
+                    true, 
+                    "Listado de proveedores obtenido exitosamente.", 
+                    response
+                ));
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new ApiResponse<string>(false, "Error: " + ex.Message));
+            }
         }
 
-        //VER POR ID
-        [HttpGet("{id}")] // GET http://localhost:5280/api/supplier/1
+        // ============================================================
+        // GET BY ID
+        // ============================================================
+        [HttpGet("{id}")]
         public async Task<ActionResult<ApiResponse<SupplierDetailDto>>> GetSupplierById(int id)
         {
-            // 1. Búsqueda optimizada de solo lectura
-            // AsNoTracking() es vital aquí para no sobrecargar la memoria de Entity Framework
-            var supplier = await _context.Supplier
+            var supplier = await context.Supplier
                 .AsNoTracking()
                 .FirstOrDefaultAsync(s => s.Id == id);
 
-            // 2. Manejo del caso donde no existe (HTTP 404)
             if (supplier == null)
             {
                 return NotFound(new ApiResponse<SupplierDetailDto>(
-                    success: false,
-                    message: "Error al buscar el proveedor.",
-                    errors: [$"No se encontró ningún proveedor registrado con el identificador {id}."]
+                    false, 
+                    "Proveedor no encontrado.", 
+                    null, 
+                    [$"No se encontró ningún proveedor con ID {id}."]
                 ));
             }
 
-            // 3. Retornar HTTP 200 OK con los datos mappeados Modelo -> DTO
-            return Ok(new ApiResponse<SupplierDetailDto>(
-                success: true,
-                message: "Proveedor obtenido exitosamente.",
-                data: supplier.ToDetailDto() // Usamos el método para mapear a DTO de Detalle
-            ));
+            return Ok(new ApiResponse<SupplierDetailDto>(true, "Proveedor obtenido.", supplier.ToDetailDto()));
         }
 
-
-
-        //CREAR
-        [HttpPost] // POST http://localhost:5280/api/supplier
+        // ============================================================
+        // CREAR PROVEEDOR
+        // ============================================================
+        [HttpPost]
         public async Task<ActionResult<ApiResponse<SupplierDetailDto>>> CreateSupplier([FromBody] SupplierCreateDto dto)
         {
-            // 1. Regla de Negocio: Evitar duplicados por RUT o Email
-            var existingSupplier = await _context.Supplier
-                .AsNoTracking() // Optimización: AsNoTracking hace la consulta más rápida y consume menos memoria
+            var existingSupplier = await context.Supplier
+                .AsNoTracking()
                 .FirstOrDefaultAsync(s => s.Rut == dto.Rut || s.Email == dto.Email);
 
             if (existingSupplier != null)
             {
-                bool isRutDuplicate = existingSupplier.Rut == dto.Rut;
-                string errorMsg = isRutDuplicate 
-                    ? "Ya existe un proveedor registrado con este RUT." 
-                    : "Ya existe un proveedor registrado con este Correo Electrónico.";
-
-                return Conflict(new ApiResponse<SupplierDetailDto>(
-                    success: false,
-                    message: "Error al crear el proveedor.",
-                    errors: [errorMsg]
-                )); // Conflict (409) es el estado HTTP correcto para datos duplicados
+                return Conflict(new ApiResponse<SupplierDetailDto>(false, "El RUT o Email ya están registrados."));
             }
 
+            var newSupplier = dto.ToModelFromCreate();
+            context.Supplier.Add(newSupplier);
+            await context.SaveChangesAsync();
 
-            // 2. Mapeo Manual (DTO -> Modelo)
-            var newSupplier = dto.ToModelFromCreate(); // Usamos el método para mapear a Modelo
-
-            // 3. Guardar en Base de Datos
-            _context.Supplier.Add(newSupplier);
-            await _context.SaveChangesAsync();
-
-            // 4. Retornar 201 Created (Estándar REST) con tu ApiResponse y el DTO de Detalle del nuevo proveedor
-            return CreatedAtAction(
-                actionName: nameof(GetSupplierById), // Referencia al método GET por ID que haremos después
-                routeValues: new { id = newSupplier.Id },
-                value: new ApiResponse<SupplierDetailDto>(
-                    success: true, 
-                    message: "Proveedor creado exitosamente.", 
-                    data: newSupplier.ToDetailDto() // Mapeamos el nuevo proveedor a DTO de Detalle para la respuesta
-                )
-            );
+            return CreatedAtAction(nameof(GetSupplierById), new { id = newSupplier.Id }, 
+                new ApiResponse<SupplierDetailDto>(true, "Proveedor creado exitosamente.", newSupplier.ToDetailDto()));
         }
 
-        //EDITAR
-        [HttpPut("{id}")] // PUT http://localhost:5280/api/supplier/1
+        // ============================================================
+        // ACTUALIZAR PROVEEDOR
+        // ============================================================
+        [HttpPut("{id}")]
         public async Task<ActionResult<ApiResponse<SupplierDetailDto>>> UpdateSupplier(int id, [FromBody] SupplierUpdateDto dto)
         {
-            // 1. Buscar el proveedor (usamos FindAsync que por defecto hace tracking, necesario para el UPDATE)
-            var supplier = await _context.Supplier.FindAsync(id);
+            var supplier = await context.Supplier.FindAsync(id);
 
-            if (supplier == null)
-            {
-                return NotFound(new ApiResponse<SupplierDetailDto>(
-                    success: false,
-                    message: "Error al actualizar.",
-                    errors: [$"No se encontró el proveedor con identificador {id}."]
-                ));
-            }
+            if (supplier == null) return NotFound(new ApiResponse<string>(false, "No encontrado."));
 
-            // 2. Regla de Negocio: Validar que el nuevo RUT o Email no pertenezcan a OTRO proveedor
-            // Usamos AnyAsync porque es más rápido que FirstOrDefaultAsync cuando solo queremos saber si existe (devuelve un booleano)
-            var duplicateExists = await _context.Supplier
+            var duplicateExists = await context.Supplier
                 .AsNoTracking()
                 .AnyAsync(s => s.Id != id && (s.Rut == dto.Rut || s.Email == dto.Email));
 
-            if (duplicateExists)
-            {
-                return Conflict(new ApiResponse<SupplierDetailDto>(
-                    success: false,
-                    message: "Error al actualizar el proveedor.",
-                    errors: ["El RUT o Correo Electrónico ya está registrado en otro proveedor."]
-                ));
-            }
+            if (duplicateExists) return Conflict(new ApiResponse<string>(false, "RUT o Email ya en uso por otro proveedor."));
 
-
-
-
-            // 3. Mapper para mutar la entidad existente
             supplier.UpdateModel(dto);
+            await context.SaveChangesAsync();
 
-            // 4. Guardar los cambios (EF Core detecta las diferencias automáticamente y genera el UPDATE SQL)
-            await _context.SaveChangesAsync();
-
-
-            // 5. Retornar 200 OK con el DTO de Detalle actualizado para que el Frontend tenga la información más reciente
-            return Ok(new ApiResponse<SupplierDetailDto>(
-                success: true,
-                message: "Proveedor actualizado exitosamente.",
-                data: supplier.ToDetailDto() // Mapeamos el proveedor actualizado a DTO de Detalle para la respuesta
-            ));
+            return Ok(new ApiResponse<SupplierDetailDto>(true, "Actualizado correctamente.", supplier.ToDetailDto()));
         }
 
-        // CAMBIAR ESTADO (Soft Delete / Activar)
-        [HttpPatch("{id}/toggle-status")] // PATCH http://localhost:5280/api/supplier/1/toggle-status
+        // ============================================================
+        // TOGGLE STATUS & DELETE
+        // ============================================================
+        [HttpPatch("{id}/toggle-status")]
         public async Task<ActionResult<ApiResponse<bool>>> ToggleSupplierStatus(int id)
         {
-            // 1. Buscar el proveedor rastreándolo para actualizarlo
-            var supplier = await _context.Supplier.FindAsync(id);
+            var supplier = await context.Supplier.FindAsync(id);
+            if (supplier == null) return NotFound(new ApiResponse<bool>(false, "No encontrado."));
 
-            if (supplier == null)
-            {
-                return NotFound(new ApiResponse<bool>(
-                    success: false,
-                    message: "Error al cambiar el estado.",
-                    errors: [$"No se encontró el proveedor con identificador {id}."]
-                ));
-            }
-
-            // 2. Invertir el estado actual (si era true pasa a false, y viceversa)
             supplier.IsActive = !supplier.IsActive;
+            await context.SaveChangesAsync();
 
-            // 3. Guardar cambios
-            await _context.SaveChangesAsync();
-
-            // 4. Mensaje dinámico para el Frontend
-            string actionMessage = supplier.IsActive ? "activado" : "desactivado";
-
-            // Retornamos el nuevo estado booleano para que el Frontend actualice la UI
-            return Ok(new ApiResponse<bool>(
-                success: true,
-                message: $"Proveedor {actionMessage} exitosamente.",
-                data: supplier.IsActive 
-            ));
+            return Ok(new ApiResponse<bool>(true, $"Proveedor {(supplier.IsActive ? "activado" : "desactivado")}.", supplier.IsActive));
         }
 
-        // ELIMINAR DEFINITIVAMENTE (Hard Delete)
-        [HttpDelete("{id}")] // DELETE http://localhost:5280/api/supplier/1
+        [HttpDelete("{id}")]
         public async Task<ActionResult<ApiResponse<string>>> DeleteSupplier(int id)
         {
-            // 1. Validar integridad referencial
-            bool hasHistory = await _context.Supplier
+            bool hasHistory = await context.Supplier
                 .AsNoTracking()
                 .AnyAsync(s => s.Id == id && (s.Quotes.Count != 0 || s.RequestQuoteSuppliers.Count != 0));
 
             if (hasHistory)
             {
-                return Conflict(new ApiResponse<string>( // Usamos <string> en lugar de <object>
-                    success: false,
-                    message: "No se puede eliminar el proveedor.",
-                    errors: ["El proveedor tiene cotizaciones o historial asociado. Por integridad del sistema, utilice la desactivación (Soft Delete)."]
-                ));
+                return Conflict(new ApiResponse<string>(false, "No se puede eliminar: tiene historial asociado."));
             }
 
-            // 2. Eliminación ultra optimizada
-            int deletedRows = await _context.Supplier
-                .Where(s => s.Id == id)
-                .ExecuteDeleteAsync();
+            int deletedRows = await context.Supplier.Where(s => s.Id == id).ExecuteDeleteAsync();
+            if (deletedRows == 0) return NotFound();
 
-            // 3. Verificar
-            if (deletedRows == 0)
-            {
-                return NotFound(new ApiResponse<string>(
-                    success: false,
-                    message: "Error al eliminar.",
-                    errors: [$"No se encontró el proveedor con identificador {id}."]
-                ));
-            }
-
-            // 4. Retorno exitoso sin datos adicionales (data será null por defecto)
-            return Ok(new ApiResponse<string>(
-                success: true,
-                message: "Proveedor eliminado definitivamente."
-            ));
+            return Ok(new ApiResponse<string>(true, "Proveedor eliminado definitivamente."));
         }
     }
-
-
 }

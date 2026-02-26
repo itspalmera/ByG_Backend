@@ -11,5 +11,6 @@ namespace ByG_Backend.src.Interfaces
     {
         Task<IdentityResult> ResetPasswordAsync(ResetPasswordDto dto);
         Task SendVerificationCodeAsync(string email, string code);
+        Task SendPdfDocumentAsync(string email, byte[] pdfBytes, string fileName);
     }
 }

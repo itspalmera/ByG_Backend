@@ -4,6 +4,7 @@ using System.Linq;
 using ByG_Backend.src.DTOs;
 using ByG_Backend.src.Interfaces;
 using Microsoft.AspNetCore.Identity;
+using Microsoft.AspNetCore.Mvc;
 using Resend;
 
 public class EmailService : IEmailService
@@ -43,6 +44,27 @@ public class EmailService : IEmailService
                     <hr />
                     <small>Si no solicitaste este cambio, ignora este correo.</small>
                 </div>"
+        };
+
+        await _resend.EmailSendAsync(message);
+    }
+
+    public async Task SendPdfDocumentAsync(string email, byte[] pdfBytes, string fileName)
+    {
+        var message = new EmailMessage
+        {
+            From = _config["EmailConfiguracion:from"] ?? "onboarding@resend.dev",
+            To = email,
+            Subject = "Tu Documento de Cotización - ByG",
+            HtmlBody = "<p>Adjunto encontrarás el documento PDF solicitado.</p>",
+            Attachments = new List<EmailAttachment>
+            {
+                new EmailAttachment
+                {
+                    Filename = fileName,
+                    Content = pdfBytes
+                }
+            }
         };
 
         await _resend.EmailSendAsync(message);

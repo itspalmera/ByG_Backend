@@ -16,7 +16,7 @@ namespace ByG_Backend.src.Mappers
                 po.Purchase?.PurchaseNumber ?? "Sin Referencia", // Folio Solicitud
                 po.Purchase?.ProjectName ?? "Sin Proyecto",
                 po.Quote?.Supplier?.BusinessName ?? "Proveedor Desconocido",
-                po.Date,
+                po.Date.ToString("dd/MM/yyyy HH:mm:ss"),
                 po.TotalAmount,
                 po.Status
             );
@@ -32,8 +32,8 @@ namespace ByG_Backend.src.Mappers
                 Id = po.Id,
                 OrderNumber = po.OrderNumber,
                 Status = po.Status,
-                Date = po.Date,
-                CostCenter = po.CostCenter ?? "N/A", // Si no hay C.Costo explícito, usamos el nombre del proyecto como fallback visual
+                Date = po.Date.ToString("dd/MM/yyyy HH:mm:ss"),
+                CostCenter = po.CostCenter ?? po.Purchase?.ProjectName, // Si no hay C.Costo explícito, usamos el nombre del proyecto como fallback visual
 
                 // --- Referencias ---
                 PurchaseId = po.PurchaseId,
@@ -56,7 +56,7 @@ namespace ByG_Backend.src.Mappers
                 PaymentTerms = po.PaymentTerms,
                 Currency = po.Currency,
                 ExpectedDeliveryDate = po.ExpectedDeliveryDate,
-                DeliveryDeadline = po.DeliveryDeadline,
+                DeliveryDeadline = po.DeliveryDeadline?.ToString("dd/MM/yyyy HH:mm:ss"),
                 ShippingAddress = po.ShippingAddress,
                 ShippingMethod = po.ShippingMethod,
                 Observations = po.Observations,
@@ -83,7 +83,7 @@ namespace ByG_Backend.src.Mappers
                 // --- Aprobación ---
                 ApproverName = po.ApproverName,
                 ApproverRole = po.ApproverRole,
-                SignedAt = po.SignedAt
+                SignedAt = po.SignedAt?.ToString("dd/MM/yyyy HH:mm:ss")
             };
         }
 

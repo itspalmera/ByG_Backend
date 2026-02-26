@@ -18,7 +18,7 @@ namespace ByG_Backend.src.Mappers
                 supplier.Address,
                 supplier.City,
                 supplier.ProductCategories,
-                supplier.RegisteredAt,
+                supplier.RegisteredAt.ToString("dd/MM/yyyy HH:mm:ss"),
                 supplier.IsActive
             );
         }
