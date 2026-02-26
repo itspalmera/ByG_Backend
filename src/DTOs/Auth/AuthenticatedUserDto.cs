@@ -16,8 +16,8 @@ namespace ByG_Backend.src.DTOs
         public string Role { get; set; } = null!;
 
 
-        public DateOnly Registered { get; set; }
-        public DateTime? LastAccess { get; set; }
+        public string Registered { get; set; }
+        public string? LastAccess { get; set; }
         public bool IsActive { get; set; }
     }
 }

@@ -14,8 +14,8 @@ namespace ByG_Backend.src.DTOs
 
         public string Status { get; set; }
 
-        public DateTime CreatedAt { get; set; }
-        public DateTime? SentAt { get; set; }
+        public string CreatedAt { get; set; }
+        public string? SentAt { get; set; }
 
 
         public int PurchaseId { get; set; }

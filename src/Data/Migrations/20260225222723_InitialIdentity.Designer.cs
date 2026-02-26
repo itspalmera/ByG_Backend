@@ -11,14 +11,39 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 namespace ByG_Backend.src.Data.Migrations
 {
     [DbContext(typeof(DataContext))]
-    [Migration("20260225140621_InitialCreate")]
-    partial class InitialCreate
+    [Migration("20260225222723_InitialIdentity")]
+    partial class InitialIdentity
     {
         /// <inheritdoc />
         protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder.HasAnnotation("ProductVersion", "9.0.0");
+
+            modelBuilder.Entity("ByG_Backend.src.Models.PasswordResetToken", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Code")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Email")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime>("ExpiryDate")
+                        .HasColumnType("TEXT");
+
+                    b.Property<bool>("IsUsed")
+                        .HasColumnType("INTEGER");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("PasswordResetTokens");
+                });
 
             modelBuilder.Entity("ByG_Backend.src.Models.Purchase", b =>
                 {

@@ -5,8 +5,8 @@ namespace ByG_Backend.src.DTOs
         string PurchaseNumber,
         string ProjectName,
         string Status,
-        DateTime RequestDate,
-        DateTime UpdatedAt,
+        string RequestDate,
+        string UpdatedAt,
         string Requester,
         string? Observations,
         

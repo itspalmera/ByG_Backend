@@ -7,7 +7,7 @@ namespace ByG_Backend.src.DTOs
 {
     public record RequestQuoteSupplierDto
     {
-        public DateTime SentAt { get; set; }
+        public string SentAt { get; set; } = string.Empty;
         public int RequestQuoteId { get; set; }
         public int SupplierId { get; set; }
 

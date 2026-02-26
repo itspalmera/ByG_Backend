@@ -35,7 +35,7 @@ namespace ByG_Backend.src.Mappers
             Role = user.Role,
             Registered = user.Registered.ToString("dd/MM/yyyy"), 
             LastAccess = user.LastAccess.HasValue 
-            ? user.LastAccess.Value.ToString("dd/MM/yyyy 'T' HH:mm:ss") 
+            ? user.LastAccess.Value.ToString("dd/MM/yyyy HH:mm:ss") 
             : "Sin acceso"
         };
 
@@ -61,8 +61,10 @@ namespace ByG_Backend.src.Mappers
             Token = token,
             Role = role,
             IsActive = user.IsActive,
-            Registered = user.Registered,
-            LastAccess = user.LastAccess
+            Registered = user.Registered.ToString("dd/MM/yyyy"),
+            LastAccess = user.LastAccess.HasValue 
+            ? user.LastAccess.Value.ToString("dd/MM/yyyy 'T' HH:mm:ss") 
+            : "Sin acceso"
         };
 
 

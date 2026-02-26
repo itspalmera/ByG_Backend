@@ -39,8 +39,8 @@ namespace ByG_Backend.src.DTOs
         
         public string Role { get; set; } = null!;
         public bool IsActive { get; set; } = true;
-        public DateOnly CreatedAt { get; set; } = DateOnly.FromDateTime(DateTime.UtcNow);
-        public DateTime? LastLoginAt { get; set; }
+        public string CreatedAt { get; set; } = DateTime.UtcNow.ToString("dd/MM/yyyy");
+        public string? LastLoginAt { get; set; }
         
     }
 }

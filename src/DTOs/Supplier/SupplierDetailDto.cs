@@ -10,7 +10,7 @@ namespace ByG_Backend.src.DTOs
         string? Address,
         string? City,
         string? ProductCategories,
-        DateTime RegisteredAt,
+        string RegisteredAt,
         bool IsActive
     );
 }

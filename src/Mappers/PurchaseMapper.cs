@@ -14,8 +14,8 @@ namespace ByG_Backend.src.Mappers
             purchase.PurchaseNumber,
             purchase.ProjectName,
             purchase.Status,
-            purchase.RequestDate,
-            purchase.UpdatedAt,
+            purchase.RequestDate.ToString("dd/MM/yyyy HH:mm:ss"),
+            purchase.UpdatedAt.ToString("dd/MM/yyyy HH:mm:ss"),
             purchase.Requester,
             purchase.Observations,
             
