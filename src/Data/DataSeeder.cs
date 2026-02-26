@@ -37,14 +37,14 @@ namespace ByG_Backend.src.Data
 
             // =========================================================================
             // ESCENARIO 1: SOLICITUD RECIÉN LLEGADA (INICIO)
-            // Estado Purchase: "Solicitud recibida"
+            // Estado Purchase: "Esperando proveedore"
             // Estado RequestQuote: "Pendiente" (Borrador)
             // =========================================================================
             var purchase1 = new Purchase
             {
                 PurchaseNumber = "REQ-2026-001",
                 ProjectName = "Oficina Central",
-                Status = "Solicitud recibida", // PurchaseStatuses.Received
+                Status = "Esperando proveedores", // PurchaseStatuses.Received
                 RequestDate = DateTime.UtcNow,
                 Requester = "Secretaría",
                 Observations = "Insumos mensuales de oficina",

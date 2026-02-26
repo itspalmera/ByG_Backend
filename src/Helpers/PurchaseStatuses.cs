@@ -2,7 +2,7 @@ namespace ByG_Backend.src.Helpers
 {
     public static class PurchaseStatuses
     {
-        public const string Received = "Solicitud recibida";
+        public const string Received = "Esperando proveedores";
         public const string QuoteSent = "Solicitud de cotización enviada";
         public const string WaitingReview = "Esperando revisión";
         
