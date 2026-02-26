@@ -36,6 +36,7 @@ namespace ByG_Backend.src.Controller
         public async Task<ActionResult<ApiResponse<IEnumerable<QuoteDto>>>> GetAll(
             [FromQuery] string? status,
             [FromQuery] string? searchTerm,
+            [FromQuery] int? purchaseId,
             [FromQuery] string? orderBy,
             [FromQuery] int pageNumber = 1,
             [FromQuery] int pageSize = 10
@@ -47,8 +48,15 @@ namespace ByG_Backend.src.Controller
 
             var query = _context.Quotes.AsNoTracking()
                 .Include(q => q.QuoteItems)
+                .Include(q => q.Supplier)
                 .AsQueryable();
 
+            
+            if (purchaseId.HasValue)
+            {
+                query = query.Where(q => q.PurchaseId == purchaseId.Value);
+            }
+            
             if (!string.IsNullOrWhiteSpace(status))
             {
                 query = query.Where(q => q.Status == status);
