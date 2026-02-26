@@ -4,18 +4,18 @@ using System.Linq;
 using System.Security.Claims;
 using System.Threading.Tasks;
 
+using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Identity;
+using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
+
 using ByG_Backend.src.Data;
 using ByG_Backend.src.DTOs;
 using ByG_Backend.src.Helpers;
 using ByG_Backend.src.Mappers;
 using ByG_Backend.src.Models;
 using ByG_Backend.src.Interfaces;
-
-using Microsoft.AspNetCore.Authorization;
-using Microsoft.AspNetCore.Identity;
-using Microsoft.AspNetCore.Mvc;
-using Microsoft.EntityFrameworkCore;
-using Resend;
+using ByG_Backend.src.RequestHelpers; // Para PagedResponse y Extensiones
 using ByG_Backend.src.DTO;
 
 namespace ByG_Backend.src.Controller
@@ -23,22 +23,24 @@ namespace ByG_Backend.src.Controller
     [ApiController]
     [Route("api/[controller]")]
     public class UserController(
-        ILogger<UserController> logger, DataContext context, UserManager<User> userManager, IResend resend, IUserRepository repository, IEmailService emailService) : ControllerBase
+        ILogger<UserController> logger, 
+        DataContext context, 
+        UserManager<User> userManager, 
+        IUserRepository repository, 
+        IEmailService emailService) : ControllerBase
     {
         private readonly ILogger<UserController> _logger = logger;
         private readonly DataContext _context = context;
         private readonly UserManager<User> _userManager = userManager;
-        private readonly IResend _resend = resend;
         private readonly IEmailService _emailService = emailService;
         private readonly IUserRepository _repository = repository;
 
-
-        // =========================
-        // GET ALL (Admin) + filtros inline
-        // =========================
+        // ============================================================
+        // GET ALL (Admin) - USANDO EXTENSIÓN GENÉRICA
+        // ============================================================
         [Authorize(Roles = "Admin")]
         [HttpGet]
-        public async Task<ActionResult<ApiResponse<IEnumerable<UserDto>>>> GetAll(
+        public async Task<ActionResult<ApiResponse<PagedResponse<UserDto>>>> GetAll(
             [FromQuery] bool? isActive,
             [FromQuery] string? searchTerm,
             [FromQuery] DateOnly? registeredFrom,
@@ -48,348 +50,185 @@ namespace ByG_Backend.src.Controller
             [FromQuery] int pageSize = 10
         )
         {
-
-            Console.WriteLine("************ DIAGNÓSTICO DE IDENTIDAD ************");
-            Console.WriteLine($"Usuario Autenticado: {User.Identity?.IsAuthenticated}");
-            Console.WriteLine($"Nombre (Name): {User.Identity?.Name}");
-            Console.WriteLine("--- CLAIMS RECIBIDOS ---");
-            foreach (var claim in User.Claims)
-            {
-                Console.WriteLine($"Tipo: '{claim.Type}' | Valor: '{claim.Value}'");
-            }
-            Console.WriteLine($"¿Tiene rol 'Admin' según sistema?: {User.IsInRole("Admin")}");
-            Console.WriteLine("**************************************************");
-
-
-            // --- ZONA DE DIAGNÓSTICO ---
-            Console.WriteLine("========================================");
-            Console.WriteLine($"--> RECIBIDA PETICIÓN GET /api/User");
-            Console.WriteLine($"--> Filtros: Active={isActive}, Search={searchTerm}");
-            // ----------------------------
-
             try 
             {
-                // sanitizar paginación
-                if (pageNumber < 1) pageNumber = 1;
-                if (pageSize < 1) pageSize = 10;
-                if (pageSize > 100) pageSize = 100;
-
                 var query = _context.Users.AsNoTracking().AsQueryable();
 
-                // LOG CANTIDAD TOTAL
-                var totalUsersInDb = await _context.Users.CountAsync();
-                Console.WriteLine($"--> Usuarios totales en la BD (sin filtros): {totalUsersInDb}");
-
-                // 1) Filtro por activo
+                // 1. Filtros de Negocio
                 if (isActive.HasValue)
-                {
                     query = query.Where(u => u.IsActive == isActive.Value);
-                }
-
 
                 if (registeredFrom.HasValue)
-                {
                     query = query.Where(u => u.Registered >= registeredFrom.Value);
-                }
 
                 if (registeredTo.HasValue)
-                {
-                    // opcional: incluir todo el día si te pasan solo fecha
-                    var to = registeredTo.Value;
-                    query = query.Where(u => u.Registered <= to);
-                }
+                    query = query.Where(u => u.Registered <= registeredTo.Value);
 
-                // 3) Search (email / username)
-                if (!string.IsNullOrWhiteSpace(searchTerm))
-                {
-                    var term = searchTerm.Trim().ToLower();
-                    query = query.Where(u =>
-                        (u.Email != null && u.Email.ToLower().Contains(term)) ||
-                        (u.UserName != null && u.UserName.ToLower().Contains(term)) ||
-                        (u.FirstName != null && u.FirstName.ToLower().Contains(term)) || // Agregamos nombre
-                        (u.LastName != null && u.LastName.ToLower().Contains(term))    // Agregamos apellido
-                    );
-                }
+                // Solo pasas el término y los nombres de las columnas donde quieres buscar
+                query = query.ApplySearch(searchTerm, "Email", "UserName", "FirstName", "LastName");
 
-                // LOG ANTES DE PAGINAR
-                var countAfterFilter = await query.CountAsync();
-                Console.WriteLine($"--> Usuarios tras aplicar filtros: {countAfterFilter}");
+                // 2. Lógica de Ordenamiento
+                query = query.ApplySorting(orderBy, "Registered");
 
-                // 4) Ordenamiento simple
-                //    orderBy ejemplos:
-                //    - "email"
-                //    - "email:desc"
-                //    - "username"
-                //    - "createdAt:desc"
-                //    - "lastAccess"
-                var key = (orderBy ?? "createdAt:desc").Trim().ToLower();
-                var desc = key.EndsWith(":desc");
-                if (desc) key = key.Replace(":desc", "");
+                // 3. APLICACIÓN DE LA EXTENSIÓN GENÉRICA (DRY)
+                var pagedResult = await query.ToPagedResponseAsync(pageNumber, pageSize);
 
-                query = key switch
-                {
-                    "email" => desc ? query.OrderByDescending(u => u.Email) : query.OrderBy(u => u.Email),
-                    "username" => desc ? query.OrderByDescending(u => u.UserName) : query.OrderBy(u => u.UserName),
-                    "lastaccess" => desc ? query.OrderByDescending(u => u.LastAccess) : query.OrderBy(u => u.LastAccess),
-                    "createdat" => desc ? query.OrderByDescending(u => u.Registered) : query.OrderBy(u => u.Registered),
-                    _ => query.OrderByDescending(u => u.Registered)
-                };
+                // 4. Mapeo de los ítems resultantes a DTO
+                var dtos = pagedResult.Items.Select(UserMapper.UserToUserDto).ToList();
 
-                // (opcional) total para que el frontend sepa
-                var total = await query.CountAsync();
+                // 5. Re-envolver en un PagedResponse de DTOs para el Frontend
+                var finalPagedData = new PagedResponse<UserDto>(
+                    dtos, 
+                    pagedResult.TotalItems, 
+                    pagedResult.PageNumber, 
+                    pagedResult.PageSize
+                );
 
-                // 5) Paginación
-                var users = await query
-                    .Skip((pageNumber - 1) * pageSize)
-                    .Take(pageSize)
-                    .ToListAsync();
-
-                Console.WriteLine($"--> Usuarios recuperados en esta página: {users.Count}");
-                
-                // VERIFICAR DATOS DEL PRIMER USUARIO (Si existe)
-                if(users.Count > 0) {
-                    Console.WriteLine($"--> Ejemplo User 1: {users[0].Email} - Rol: {users[0].Role}");
-                }
-
-                var dtos = users.Select(UserMapper.UserToUserDto).ToList();
-
-                return Ok(new ApiResponse<IEnumerable<UserDto>>(
-                    true,
-                    $"Usuarios obtenidos correctamente. Total: {countAfterFilter}",
-                    dtos
-                ));
+                return Ok(new ApiResponse<PagedResponse<UserDto>>(
+                    true, 
+                    "Usuarios obtenidos correctamente", 
+                    finalPagedData));
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"--> ERROR CRÍTICO EN GET ALL: {ex.Message}");
-                Console.WriteLine(ex.StackTrace);
+                _logger.LogError(ex, "Error en UserController.GetAll");
                 return StatusCode(500, new ApiResponse<string>(false, "Error interno: " + ex.Message));
             }
         }
 
-        // =========================
-        // SEARCH (Admin) by email OR name
-        // =========================
+        // ============================================================
+        // SEARCH (Admin) - Búsqueda por coincidencia exacta
+        // ============================================================
         [Authorize(Roles = "Admin")]
         [HttpGet("search")]
-        public async Task<ActionResult<ApiResponse<UserDto>>> GetById([FromQuery] UserSearchDto search)
+        public async Task<ActionResult<ApiResponse<UserDto>>> GetBySearch([FromQuery] UserSearchDto search)
         {
             if (string.IsNullOrEmpty(search.email) && string.IsNullOrEmpty(search.name))
-            {
-                return BadRequest(new ApiResponse<string>(false, "Se requiere un email o nombre para buscar el usuario"));
-            }
+                return BadRequest(new ApiResponse<string>(false, "Se requiere email o nombre"));
 
+            User? user = null;
             if (!string.IsNullOrEmpty(search.name))
-            {
-                var user = await _context.Users
-                    .AsNoTracking()
-                    .FirstOrDefaultAsync(u => u.UserName == search.name);
-
-                if (user == null)
-                    return NotFound(new ApiResponse<string>(false, "Usuario no encontrado"));
-
-                var dto = UserMapper.UserToUserDto(user);
-                return Ok(new ApiResponse<UserDto>(true, "Usuario encontrado", dto));
-            }
+                user = await _context.Users.AsNoTracking().FirstOrDefaultAsync(u => u.UserName == search.name);
             else
-            {
-                var userByEmail = await _context.Users
-                    .AsNoTracking()
-                    .FirstOrDefaultAsync(u => u.Email == search.email);
+                user = await _context.Users.AsNoTracking().FirstOrDefaultAsync(u => u.Email == search.email);
 
-                if (userByEmail == null)
-                    return NotFound(new ApiResponse<string>(false, "Usuario no encontrado (email)"));
+            if (user == null) return NotFound(new ApiResponse<string>(false, "Usuario no encontrado"));
 
-                var dtoByEmail = UserMapper.UserToUserDto(userByEmail);
-                return Ok(new ApiResponse<UserDto>(true, "Usuario encontrado", dtoByEmail));
-            }
+            return Ok(new ApiResponse<UserDto>(true, "Usuario encontrado", UserMapper.UserToUserDto(user)));
         }
 
-        // =========================
+        // ============================================================
         // TOGGLE STATUS (Admin)
-        // =========================
+        // ============================================================
         [Authorize(Roles = "Admin")]
         [HttpPatch("status")]
         public async Task<ActionResult<ApiResponse<string>>> ToggleStatus([FromBody] ToggleStatusDto dto)
         {
             var user = await _userManager.FindByEmailAsync(dto.Email);
-            if (user == null)
-                return NotFound(new ApiResponse<string>(false, "Usuario no encontrado"));
+            if (user == null) return NotFound(new ApiResponse<string>(false, "Usuario no encontrado"));
 
             var roles = await _userManager.GetRolesAsync(user);
             if (roles.Contains("Admin", StringComparer.OrdinalIgnoreCase))
-            {
-                return BadRequest(new ApiResponse<string>(
-                    false,
-                    "No se puede deshabilitar una cuenta con rol de administrador."
-                ));
-            }
+                return BadRequest(new ApiResponse<string>(false, "No se puede deshabilitar a un administrador"));
 
             user.IsActive = !user.IsActive;
+            var result = await _userManager.UpdateAsync(user);
 
-            var update = await _userManager.UpdateAsync(user);
-            if (!update.Succeeded)
-            {
-                return StatusCode(500, new ApiResponse<string>(
-                    false,
-                    "Error al actualizar el estado del usuario",
-                    null,
-                    update.Errors.Select(e => e.Description).ToList()
-                ));
-            }
+            if (!result.Succeeded) return BadRequest(new ApiResponse<string>(false, "Error al actualizar estado"));
 
-            var message = user.IsActive ? "Usuario habilitado correctamente" : "Usuario deshabilitado correctamente";
-            return Ok(new ApiResponse<string>(true, message));
+            return Ok(new ApiResponse<string>(true, user.IsActive ? "Usuario habilitado" : "Usuario deshabilitado"));
         }
 
-        // =========================
+        // ============================================================
         // UPDATE PROFILE (User)
-        // =========================
+        // ============================================================
         [Authorize(Roles = "User")]
         [HttpPut("profile")]
         public async Task<ActionResult<ApiResponse<UserDto>>> UpdateProfile([FromBody] UpdateProfileDto dto)
         {
             var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
-            if (userId is null)
-                return Unauthorized(new ApiResponse<string>(false, "Usuario no autenticado"));
+            if (userId == null) return Unauthorized(new ApiResponse<string>(false, "Sesión inválida"));
 
             var user = await _userManager.FindByIdAsync(userId);
-            if (user is null)
-                return NotFound(new ApiResponse<string>(false, "Usuario no encontrado"));
+            if (user == null) return NotFound(new ApiResponse<string>(false, "Usuario no encontrado"));
 
             UserMapper.UpdateUserFromDto(user, dto);
-
             var update = await _userManager.UpdateAsync(user);
-            if (!update.Succeeded)
-            {
-                return StatusCode(500, new ApiResponse<string>(
-                    false,
-                    "Error al actualizar el perfil",
-                    null,
-                    update.Errors.Select(e => e.Description).ToList()
-                ));
-            }
 
-            return Ok(new ApiResponse<UserDto>(true, "Perfil actualizado correctamente", UserMapper.UserToUserDto(user)));
+            if (!update.Succeeded) return BadRequest(new ApiResponse<string>(false, "Error al guardar cambios"));
+
+            return Ok(new ApiResponse<UserDto>(true, "Perfil actualizado", UserMapper.UserToUserDto(user)));
         }
 
-        
-        // =========================
-        // Send Verification Code
-        // =========================
+        // ============================================================
+        // PASSWORD RECOVERY (Change & Reset)
+        // ============================================================
         [HttpPost("ChangePassword")]
         public async Task<IActionResult> ForgotPassword([FromBody] ForgotPasswordDto dto)
         {
-            // 1. Validar que el usuario existe en tu sistema
-            var user = await _context.User.FirstOrDefaultAsync(u => u.Email == dto.Email);
-            if (user == null) return NotFound("El correo no está registrado.");
+            var user = await _context.Users.FirstOrDefaultAsync(u => u.Email == dto.Email);
+            if (user == null) return NotFound("Correo no registrado.");
 
-            // 2. Generar código aleatorio
             string code = new Random().Next(100000, 999999).ToString();
 
-            // 3. Guardar en tu tabla de "PasswordResets" o similar
-            // Es vital guardar la hora actual + los 3 minutos de tu config
             var resetToken = new PasswordResetToken {
                 Email = dto.Email,
                 Code = code,
                 ExpiryDate = DateTime.UtcNow.AddMinutes(3) 
             };
+
             _context.PasswordResetTokens.Add(resetToken);
             await _context.SaveChangesAsync();
-
-            // 4. Enviar el correo
             await _emailService.SendVerificationCodeAsync(dto.Email, code);
 
             return Ok("Código enviado con éxito.");
         }
 
-
         [HttpPost("ResetPassword")]
         public async Task<IActionResult> ResetPassword([FromBody] ResetPasswordDto dto)
         {
-            // 1. Buscar el token en tu tabla manual (ByG)
             var resetToken = await _context.PasswordResetTokens
                 .Where(t => t.Email == dto.Email && t.Code == dto.Code && !t.IsUsed)
                 .OrderByDescending(t => t.ExpiryDate)
                 .FirstOrDefaultAsync();
 
-            // 2. Validaciones de tu código manual
-            if (resetToken == null)
-                return BadRequest("Código de verificación inválido.");
+            if (resetToken == null || resetToken.ExpiryDate < DateTime.UtcNow)
+                return BadRequest("Código inválido o expirado.");
 
-            if (resetToken.ExpiryDate < DateTime.UtcNow)
-                return BadRequest("El código ha expirado.");
-
-            // 3. Buscar al usuario mediante UserManager (más seguro que _context.User)
             var user = await _userManager.FindByEmailAsync(dto.Email);
-            if (user == null) 
-                return NotFound("Usuario no encontrado.");
+            if (user == null) return NotFound("Usuario no encontrado.");
 
-            // 4. CAMBIO CLAVE CON IDENTITY
-            // Generamos un token de sistema para bypass el requisito de "password anterior"
             var token = await _userManager.GeneratePasswordResetTokenAsync(user);
             var result = await _userManager.ResetPasswordAsync(user, token, dto.NewPassword);
 
-            if (!result.Succeeded)
-            {
-                return BadRequest(new { 
-                    Message = "Error al cambiar la contraseña", 
-                    Errors = result.Errors.Select(e => e.Description) 
-                });
-            }
+            if (!result.Succeeded) return BadRequest(result.Errors);
 
-            // 5. Marcar como usado y guardar cambios
             resetToken.IsUsed = true;
-            _context.PasswordResetTokens.Update(resetToken);
             await _context.SaveChangesAsync();
 
             return Ok("Contraseña actualizada con éxito.");
         }
 
+        // ============================================================
+        // CHANGE ROLE (Admin)
+        // ============================================================
         [Authorize(Roles = "Admin")]
         [HttpPatch("changeRole")]
         public async Task<IActionResult> ChangeRole([FromBody] ChangeRoleDto dto)
         {
-            try
-            {
-                if (!ModelState.IsValid)
-                    return BadRequest(new ApiResponse<string>(false, "Datos inválidos"));
+            var user = await _userManager.FindByEmailAsync(dto.Email);
+            if (user == null) return NotFound(new ApiResponse<string>(false, "Usuario no encontrado"));
 
-                
-                var user = await _userManager.FindByEmailAsync(dto.Email);
-                if (user == null)
-                    return NotFound(new ApiResponse<string>(false, "Usuario no encontrado"));
+            var currentRoles = await _userManager.GetRolesAsync(user);
+            await _userManager.RemoveFromRolesAsync(user, currentRoles);
+            
+            var addResult = await _userManager.AddToRoleAsync(user, dto.NewRole);
+            if (!addResult.Succeeded) return BadRequest(new ApiResponse<string>(false, "Error al asignar nuevo rol"));
 
-                
-                var currentRoles = await _userManager.GetRolesAsync(user);
-                var removeResult = await _userManager.RemoveFromRolesAsync(user, currentRoles);
-                
-                if (!removeResult.Succeeded)
-                    return StatusCode(500, new ApiResponse<string>(false, "Error al limpiar roles antiguos"));
+            user.Role = dto.NewRole;
+            await _userManager.UpdateAsync(user);
 
-                
-                var addResult = await _userManager.AddToRoleAsync(user, dto.NewRole);
-                if (!addResult.Succeeded)
-                {
-                    
-                    await _userManager.AddToRolesAsync(user, currentRoles);
-                    return BadRequest(new ApiResponse<string>(false, $"El rol '{dto.NewRole}' no es válido o no existe."));
-                }
-
-                
-                user.Role = dto.NewRole;
-                var updateResult = await _userManager.UpdateAsync(user);
-
-                if (!updateResult.Succeeded)
-                    return StatusCode(500, new ApiResponse<string>(false, "Rol cambiado en Identity pero falló la actualización del perfil."));
-
-                return Ok(new ApiResponse<string>(true, $"Rol de {user.Email} actualizado a {dto.NewRole} correctamente."));
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Error al cambiar rol del usuario {Email}", dto.Email);
-                return StatusCode(500, new ApiResponse<string>(false, "Error interno del servidor", null, new List<string> { ex.Message }));
-            }
+            return Ok(new ApiResponse<string>(true, $"Rol de {user.Email} actualizado a {dto.NewRole}"));
         }
     }
 }

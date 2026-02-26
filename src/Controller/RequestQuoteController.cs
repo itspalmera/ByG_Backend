@@ -3,32 +3,41 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.AspNetCore.Mvc;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
+
 using ByG_Backend.src.Data;
 using ByG_Backend.src.DTOs;
 using ByG_Backend.src.Helpers;
 using ByG_Backend.src.Services;
 using ByG_Backend.src.Mappers;
-using Microsoft.AspNetCore.Mvc;
-using QuestPDF.Fluent;
 using ByG_Backend.src.Models;
 using ByG_Backend.src.Options;
-using Microsoft.Extensions.Options;
 using ByG_Backend.src.Interfaces;
+using ByG_Backend.src.RequestHelpers;
+using QuestPDF.Fluent; // Indispensable para la paginación genérica
 
 namespace ByG_Backend.src.Controller
 {
     [ApiController]
     [Route("api/Request")]
     public class RequestQuoteController(
-        ILogger<RequestQuoteController> logger, DataContext context, IOptions<CompanyInfoOptions> companyOptions, IEmailService emailService) : ControllerBase
+        ILogger<RequestQuoteController> logger, 
+        DataContext context, 
+        IOptions<CompanyInfoOptions> companyOptions, 
+        IEmailService emailService) : ControllerBase
     {
         private readonly ILogger<RequestQuoteController> _logger = logger;
         private readonly DataContext _context = context;
         private readonly CompanyInfoOptions _company = companyOptions.Value;
         private readonly IEmailService _emailService = emailService;
-        //[Authorize(Roles = "Admin")]
+
+        // ============================================================
+        // GET ALL (Filtros + Paginación Genérica DRY)
+        // ============================================================
         [HttpGet]
-        public async Task<ActionResult<ApiResponse<IEnumerable<RequestQuoteDto>>>> GetAll(
+        public async Task<ActionResult<ApiResponse<PagedResponse<RequestQuoteDto>>>> GetAll(
             [FromQuery] string? status,
             [FromQuery] string? searchTerm,
             [FromQuery] string? orderBy,
@@ -37,63 +46,55 @@ namespace ByG_Backend.src.Controller
             [FromQuery] int pageSize = 10
         )
         {
-            if (pageNumber < 1) pageNumber = 1;
-            if (pageSize < 1) pageSize = 10;
-            if (pageSize > 100) pageSize = 100;
-
-            var query = _context.RequestQuotes.AsNoTracking()
-                .Include(q => q.RequestQuoteSuppliers)
-                .AsQueryable();
-
-            if (!string.IsNullOrWhiteSpace(status))
+            try
             {
-                query = query.Where(q => q.Status == status);
-            }
+                var query = _context.RequestQuotes.AsNoTracking()
+                    .Include(q => q.RequestQuoteSuppliers)
+                    .AsQueryable();
 
-            if (!string.IsNullOrWhiteSpace(purchaseId))
-            {
-                query = query.Where(q => q.PurchaseId.ToString() == purchaseId);
-            }
+                // 1. Filtros
 
-            if (!string.IsNullOrWhiteSpace(searchTerm))
-            {
-                var term = searchTerm.Trim().ToLower();
 
-                query = query.Where(q =>
-                    (q.Status != null && q.Status.ToLower().Contains(term)) ||
-                    q.Number.ToString().Contains(term)
+                if (!string.IsNullOrWhiteSpace(purchaseId))
+                {
+                    query = query.Where(q => q.PurchaseId.ToString() == purchaseId);
+                }
+
+                query = query.ApplySearch(searchTerm, "Status");
+
+                // 2. Ordenamiento
+                query = query.ApplySorting(orderBy, "CreatedAt");
+
+                // 3. USO DE LA EXTENSIÓN GENÉRICA
+                var pagedResult = await query.ToPagedResponseAsync(pageNumber, pageSize);
+
+                // 4. Mapeo a DTOs
+                var dtos = pagedResult.Items.Select(RequestQuoteMapper.RequestQuoteToRequestQuoteDto).ToList();
+
+                // 5. Envolver en el formato final de PagedResponse de DTOs
+                var finalResponse = new PagedResponse<RequestQuoteDto>(
+                    dtos, 
+                    pagedResult.TotalItems, 
+                    pagedResult.PageNumber, 
+                    pagedResult.PageSize
                 );
+
+                return Ok(new ApiResponse<PagedResponse<RequestQuoteDto>>(
+                    true, 
+                    "Solicitudes obtenidas correctamente", 
+                    finalResponse
+                ));
             }
-
-            // Orden por defecto: más recientes primero
-            query = orderBy?.ToLower() switch
+            catch (Exception ex)
             {
-                "number" => query.OrderBy(q => q.Number),
-                "number_desc" => query.OrderByDescending(q => q.Number),
-                "status" => query.OrderBy(q => q.Status),
-                "status_desc" => query.OrderByDescending(q => q.Status),
-                _ => query.OrderByDescending(q => q.CreatedAt)
-            };
-
-            var total = await query.CountAsync();
-
-            var quotes = await query
-                .Skip((pageNumber - 1) * pageSize)
-                .Take(pageSize)
-                .ToListAsync();
-
-            var dtos = quotes.Select(RequestQuoteMapper.RequestQuoteToRequestQuoteDto).ToList();
-
-            return Ok(new ApiResponse<IEnumerable<RequestQuoteDto>>(
-                true,
-                $"Solicitud de cotizaciones obtenidas correctamente. Total: {total}",
-                dtos
-            ));
+                _logger.LogError(ex, "Error al obtener solicitudes de cotización");
+                return StatusCode(500, new ApiResponse<string>(false, "Error interno del servidor"));
+            }
         }
 
-
-
-        //[Authorize(Roles = "Admin")] 
+        // ============================================================
+        // GET BY ID
+        // ============================================================
         [HttpGet("{id:int}")]
         public async Task<ActionResult<ApiResponse<RequestQuote>>> GetById(int id)
         {
@@ -103,108 +104,63 @@ namespace ByG_Backend.src.Controller
                 .FirstOrDefaultAsync(q => q.Id == id);
 
             if (requestQuote == null)
-            {
-                return NotFound(new ApiResponse<RequestQuote>(
-                    false,
-                    "Solicitud de cotización no encontrada"
-                ));
-            }
+                return NotFound(new ApiResponse<RequestQuote>(false, "Solicitud no encontrada"));
 
-            return Ok(new ApiResponse<RequestQuote>(
-                true,
-                "Solicitud de cotización encontrada",
-                requestQuote
-            ));
+            return Ok(new ApiResponse<RequestQuote>(true, "Solicitud encontrada", requestQuote));
         }
 
+        // ============================================================
+        // PDF & EMAIL SERVICES (Lógica de Negocio)
+        // ============================================================
 
-        // =========================
-        // Create Quote (Admin)
-        // =========================
         [HttpPost("create")]
         public byte[] GenerarCotizacionPdf([FromBody] PdfRequestDto request)
         {
-            // 1. Invocamos al mapper para obtener los modelos originales
             var (compra, solicitud) = PdfMapper.MapDtoToModels(request);
-
-            // 2. Instancias tu documento con los modelos mapeados
             var documento = new QuoteServices(compra, solicitud, _company);
-
-            // 3. Generas y retornas el PDF
             return documento.GeneratePdf(); 
         }
 
-
-
-
-        // GET: /api/request/{id}/pdf
         [HttpGet("{id:int}/pdf")]
         public async Task<IActionResult> DownloadRequestQuotePdf(int id)
         {
             var rq = await _context.RequestQuotes
-                .Include(r => r.Purchase)
-                    .ThenInclude(p => p.PurchaseItems)
+                .Include(r => r.Purchase).ThenInclude(p => p.PurchaseItems)
                 .AsNoTracking()
                 .FirstOrDefaultAsync(r => r.Id == id);
 
-            if (rq == null)
-                return NotFound(new ApiResponse<string>(false, "Solicitud no encontrada"));
-
-            if (rq.Purchase == null)
-                return BadRequest(new ApiResponse<string>(false, "La solicitud no tiene compra asociada"));
-
-            // Asegura que hay items
-            if (rq.Purchase.PurchaseItems == null || rq.Purchase.PurchaseItems.Count == 0)
-                return BadRequest(new ApiResponse<string>(false, "La compra no tiene ítems registrados"));
+            if (rq == null) return NotFound(new ApiResponse<string>(false, "Solicitud no encontrada"));
+            if (rq.Purchase == null) return BadRequest(new ApiResponse<string>(false, "La solicitud no tiene compra asociada"));
 
             var pdf = new QuoteServices(rq.Purchase, rq, _company).GeneratePdf();
-
-            var fileName = $"Solicitud_{rq.Number}.pdf";
-            return File(pdf, "application/pdf", fileName);
+            return File(pdf, "application/pdf", $"Solicitud_{rq.Number}.pdf");
         }
-
-
-
 
         [HttpPost("SendQuotePdf")]
         public async Task<IActionResult> EnviarCotizacionMultiple([FromBody] SendPdfRequestDto request)
         {
-            // 1. Validación básica
             if (request.Emails == null || !request.Emails.Any())
-                return BadRequest("Debes proporcionar al menos un correo electrónico.");
+                return BadRequest("Debes proporcionar al menos un correo.");
 
             try 
             {
-                // 2. Generar el PDF una sola vez en memoria
-                // Usamos tu Mapper para convertir los DTOs en Modelos (Purchase/RequestQuote)
                 var (compra, solicitud) = PdfMapper.MapDtoToModels(request.PdfData);
-                
-                // Instanciamos QuoteServices (ByG)
                 var documento = new QuoteServices(compra, solicitud, _company);
                 byte[] pdfBytes = documento.GeneratePdf();
 
-                // 3. Preparar las tareas de envío
                 string nombreArchivo = $"Cotizacion_{request.PdfData.Compra.PurchaseNumber}.pdf";
                 
                 var envioTasks = request.Emails.Select(email => 
-                    _emailService.SendPdfDocumentAsync(
-                        email, 
-                        pdfBytes, 
-                        nombreArchivo
-                    )
+                    _emailService.SendPdfDocumentAsync(email, pdfBytes, nombreArchivo)
                 );
 
-                // 4. Ejecutar envíos en paralelo
                 await Task.WhenAll(envioTasks);
 
-                return Ok(new { 
-                    Message = $"Documento {nombreArchivo} enviado con éxito.", 
-                    Destinatarios = request.Emails.Count 
-                });
+                return Ok(new { Message = $"Enviado con éxito a {request.Emails.Count} destinatarios." });
             }
             catch (Exception ex)
             {
-                // Loguear el error para soporte de ByG
+                _logger.LogError(ex, "Error en el envío múltiple de PDF");
                 return StatusCode(500, $"Error en el proceso de envío: {ex.Message}");
             }
         }
