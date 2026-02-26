@@ -15,6 +15,7 @@ namespace ByG_Backend.src.DTOs
 
         // Banderas de estado para la UI (Ayuda a la navegación en NextJS)
         RequestQuoteDto? RequestQuote,   // ¿Ya se pidieron cotizaciones?
-        bool HasPurchaseOrder   // ¿Ya se generó la OC final?
+        bool HasPurchaseOrder,   // ¿Ya se generó la OC final?
+        int? PurchaseOrderId
     );
 }

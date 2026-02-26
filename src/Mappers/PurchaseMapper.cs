@@ -30,7 +30,8 @@ namespace ByG_Backend.src.Mappers
             ? RequestQuoteMapper.RequestQuoteToRequestQuoteDto(purchase.RequestQuote) 
             : null,
 
-            HasPurchaseOrder: purchase.PurchaseOrder != null
+            HasPurchaseOrder: purchase.PurchaseOrder != null,
+            PurchaseOrderId: purchase.PurchaseOrder?.Id
         );
         }
 
