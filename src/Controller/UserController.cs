@@ -42,6 +42,7 @@ namespace ByG_Backend.src.Controller
         [HttpGet]
         public async Task<ActionResult<ApiResponse<PagedResponse<UserDto>>>> GetAll(
             [FromQuery] bool? isActive,
+            [FromQuery] string? role,
             [FromQuery] string? searchTerm,
             [FromQuery] DateOnly? registeredFrom,
             [FromQuery] DateOnly? registeredTo,
@@ -57,6 +58,9 @@ namespace ByG_Backend.src.Controller
                 // 1. Filtros de Negocio
                 if (isActive.HasValue)
                     query = query.Where(u => u.IsActive == isActive.Value);
+
+                if (!string.IsNullOrEmpty(role))
+                    query = query.Where(u => u.Role == role);
 
                 if (registeredFrom.HasValue)
                     query = query.Where(u => u.Registered >= registeredFrom.Value);
