@@ -6,7 +6,7 @@ namespace ByG_Backend.src.DTOs
         string PurchaseNumber,   // Folio Solicitud (Para referencia)
         string ProjectName,      // Nombre obra
         string SupplierName,     // Nombre Proveedor
-        DateTime Date,           // Fecha emisión
+        string Date,             // Fecha emisión
         decimal TotalAmount,     // Monto total
         string Status            // Estado
     );
