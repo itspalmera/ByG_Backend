@@ -1,0 +1,83 @@
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Threading.Tasks;
+using ByG_Backend.src.DTOs;
+using ByG_Backend.src.Models;
+
+namespace ByG_Backend.src.Mappers
+{
+    public class QuoteMapper
+    {
+        public static QuoteDto QuoteToQuoteDto(Quote quote) =>
+            new()
+            {
+                id = quote.Id.ToString(),
+                Number = quote.Number,
+                Status = quote.Status ?? "Pendiente",
+                TotalPrice = quote.TotalPrice,
+                Date = quote.Date.ToString("dd/MM/yyyy"),
+                Observations = quote.Observations,
+                SupplierName = quote.Supplier?.BusinessName ?? "Sin proveedor",
+                Items = quote.QuoteItems?.Select(i => new QuoteItemDetailDto
+                {
+                    Name = i.Name,
+                    Quantity = i.Quantity,
+                    UnitPrice = i.UnitPrice,
+                    Unit = i.Unit
+                }).ToList() ?? new List<QuoteItemDetailDto>()
+            };
+
+
+        // Método para actualizar un Quote existente desde un DTO
+        public static void UpdateQuoteFromDto(Quote quote, UpdateQuoteDto dto)
+        {
+            if (!string.IsNullOrEmpty(dto.Status))
+                quote.Status = dto.Status;
+            
+            if (dto.TotalPrice.HasValue)
+                quote.TotalPrice = dto.TotalPrice;
+            
+            if (dto.Items != null)
+            {
+                quote.QuoteItems?.Clear();
+                foreach (var itemName in dto.Items)
+                {
+                    quote.QuoteItems?.Add(new QuoteItem { 
+                        Name = itemName,
+                        Unit = "Unidad" 
+                    });
+                }
+            }
+        }
+
+        // Método para crear un Quote desde un CreateQuoteDto
+        public static Quote CreateQuoteFromDto(CreateQuoteDto dto)
+        {
+
+                DateTime fechaValida = DateTime.TryParse(dto.Date, out DateTime parsed) 
+                ? parsed 
+                : DateTime.Now;
+
+            return new Quote
+            {
+                Number = dto.Number,
+                Status = dto.Status ?? "Pendiente",
+                TotalPrice = dto.TotalPrice,
+                Date = fechaValida,
+                Observations = dto.Observations,
+
+                SupplierId = dto.SupplierId > 0 ? dto.SupplierId : null,
+                PurchaseId = dto.PurchaseId > 0 ? dto.PurchaseId : null,
+
+                QuoteItems = dto.QuoteItems?.Select(itemDto => new QuoteItem 
+                { 
+                    Name = itemDto.Name,
+                    Quantity = itemDto.Quantity,
+                    UnitPrice = itemDto.UnitPrice,
+                    Unit = itemDto.Unit ?? "Unidad" 
+                }).ToList() ?? new List<QuoteItem>()
+            };
+        }
+    }
+}

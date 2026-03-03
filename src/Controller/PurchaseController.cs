@@ -1,0 +1,230 @@
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Threading.Tasks;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.AspNetCore.Mvc;
+
+using ByG_Backend.src.Data;
+using ByG_Backend.src.DTOs;
+using ByG_Backend.src.Helpers;
+using ByG_Backend.src.RequestHelpers;
+using ByG_Backend.src.Mappers;
+using ByG_Backend.src.Models;
+
+namespace ByG_Backend.src.Controller
+{
+    [ApiController]
+    [Route("api/[controller]")]
+    public class PurchaseController(DataContext context) : ControllerBase
+    {
+        // ============================================================
+        // OBTENER COMPRAS (VERSION REFACTORIZADA)
+        // ============================================================
+        [HttpGet] 
+        public async Task<ActionResult<ApiResponse<PagedResponse<PurchaseSummaryDto>>>> GetPurchases([FromQuery] PurchaseQueryParameters queryParams)
+        {
+            try
+            {
+                var query = context.Purchase.AsNoTracking().AsQueryable();
+
+                // 1. FILTROS ESPECÍFICOS (Lógica de negocio)
+                if (!string.IsNullOrWhiteSpace(queryParams.Status))
+                {
+                    query = query.Where(p => p.Status.ToLower() == queryParams.Status.ToLower());
+                }
+
+                if (queryParams.StartDate.HasValue)
+                {
+                    query = query.Where(p => p.RequestDate >= queryParams.StartDate.Value);
+                }
+
+                if (queryParams.EndDate.HasValue)
+                {
+                    var endDate = queryParams.EndDate.Value.AddDays(1).AddTicks(-1);
+                    query = query.Where(p => p.RequestDate <= endDate);
+                }
+
+                // 2. BÚSQUEDA GENÉRICA (DRY)
+                // Reemplaza el bloque manual de PurchaseNumber, ProjectName y Requester
+                query = query.ApplySearch(queryParams.Search, "PurchaseNumber", "ProjectName", "Requester");
+
+                // 3. ORDENAMIENTO DINÁMICO (DRY)
+                // Mapea automáticamente strings como "projectname:asc" o usa el default "RequestDate:desc"
+                query = query.ApplySorting(queryParams.SortBy, "RequestDate:desc");
+
+                // 4. PAGINACIÓN GENÉRICA
+                var pagedResult = await query.ToPagedResponseAsync(queryParams.PageNumber, queryParams.PageSize);
+
+                // 5. PROYECCIÓN A DTO (Manual, ya que no usas MapToPagedResponse)
+                var dtos = pagedResult.Items.Select(p => new PurchaseSummaryDto(
+                    p.Id,
+                    p.PurchaseNumber,
+                    p.ProjectName,
+                    p.Status,
+                    p.RequestDate,
+                    p.Requester,
+                    p.PurchaseItems != null ? p.PurchaseItems.Count : 0 
+                )).ToList();
+
+                var response = new PagedResponse<PurchaseSummaryDto>(dtos, pagedResult.TotalItems, pagedResult.PageNumber, pagedResult.PageSize);
+
+                return Ok(new ApiResponse<PagedResponse<PurchaseSummaryDto>>(true, "Listado obtenido", response));
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new ApiResponse<string>(false, "Error: " + ex.Message));
+            }
+        }
+
+        // ============================================================
+        // OBTENER COMPRA POR ID (DETALLE)
+        // ============================================================
+        [HttpGet("{id}")]
+        public async Task<ActionResult<ApiResponse<PurchaseDetailDto>>> GetPurchaseById(int id)
+        {
+            var purchase = await context.Purchase
+                .AsNoTracking()
+                .Include(p => p.PurchaseItems)
+                .Include(p => p.RequestQuote)
+                .Include(p => p.PurchaseOrder)
+                .FirstOrDefaultAsync(p => p.Id == id);
+
+            if (purchase == null)
+            {
+                return NotFound(new ApiResponse<PurchaseDetailDto>(false, "Compra no encontrada."));
+            }
+
+            return Ok(new ApiResponse<PurchaseDetailDto>(true, "Compra obtenida.", purchase.ToDetailDto()));
+        }
+
+        // ============================================================
+        // CREAR COMPRA (Transaccional)
+        // ============================================================
+        [HttpPost]
+        public async Task<ActionResult<ApiResponse<PurchaseDetailDto>>> CreatePurchase([FromBody] PurchaseCreateDto dto)
+        {
+            using var transaction = await context.Database.BeginTransactionAsync();
+            try
+            {
+                if (await context.Purchase.AnyAsync(p => p.PurchaseNumber == dto.PurchaseNumber))
+                    return Conflict(new ApiResponse<PurchaseDetailDto>(false, "El Folio ya existe."));
+
+                var newPurchase = dto.ToModelFromCreate();
+                newPurchase.Status = "Solicitud recibida";
+                context.Purchase.Add(newPurchase);
+                await context.SaveChangesAsync();
+
+                var requestQuote = new RequestQuote
+                {
+                    PurchaseId = newPurchase.Id,
+                    Number = newPurchase.PurchaseNumber.Replace("REQ", "RFQ"),
+                    Status = "Pendiente",
+                    CreatedAt = DateTime.UtcNow
+                };
+                context.RequestQuotes.Add(requestQuote);
+                await context.SaveChangesAsync();
+
+                if (dto.InitialSupplierIds != null && dto.InitialSupplierIds.Any())
+                {
+                    var relations = dto.InitialSupplierIds.Select(sId => new RequestQuoteSupplier
+                    {
+                        RequestQuoteId = requestQuote.Id,
+                        SupplierId = sId,
+                        SentAt = DateTime.UtcNow
+                    });
+                    context.RequestQuoteSuppliers.AddRange(relations);
+                    await context.SaveChangesAsync();
+                }
+
+                await transaction.CommitAsync();
+                return CreatedAtAction(nameof(GetPurchaseById), new { id = newPurchase.Id }, 
+                    new ApiResponse<PurchaseDetailDto>(true, "Compra iniciada.", newPurchase.ToDetailDto()));
+            }
+            catch (Exception ex)
+            {
+                await transaction.RollbackAsync();
+                return StatusCode(500, new ApiResponse<string>(false, "Error: " + ex.Message));
+            }
+        }
+
+        // ============================================================
+        // ACTUALIZACIONES Y OTROS
+        // ============================================================
+
+        [HttpPut("{id}")]
+        public async Task<ActionResult<ApiResponse<PurchaseDetailDto>>> UpdatePurchase(int id, [FromBody] PurchaseUpdateDto dto)
+        {
+            var purchase = await context.Purchase
+                .Include(p => p.PurchaseItems) 
+                .Include(p => p.RequestQuote)
+                .Include(p => p.PurchaseOrder)
+                .FirstOrDefaultAsync(p => p.Id == id);
+
+            if (purchase == null) return NotFound(new ApiResponse<string>(false, "No encontrada."));
+
+            purchase.UpdateModel(dto);
+            await context.SaveChangesAsync();
+
+            return Ok(new ApiResponse<PurchaseDetailDto>(true, "Compra actualizada.", purchase.ToDetailDto()));
+        }
+
+        [HttpPatch("{id}/status")]
+        public async Task<ActionResult<ApiResponse<string>>> UpdateStatusPurchase(int id, [FromBody] string newStatus)
+        {
+            if (string.IsNullOrWhiteSpace(newStatus)) return BadRequest(new ApiResponse<string>(false, "Estado inválido."));
+
+            var purchase = await context.Purchase.FindAsync(id);
+            if (purchase == null) return NotFound(new ApiResponse<string>(false, "No encontrada."));
+
+            purchase.Status = newStatus;
+            purchase.UpdatedAt = DateTime.UtcNow;
+            await context.SaveChangesAsync();
+
+            return Ok(new ApiResponse<string>(true, $"Estado actualizado a: {newStatus}"));
+        }
+
+        [HttpDelete("{id}")]
+        public async Task<ActionResult<ApiResponse<string>>> DeletePurchase(int id)
+        {
+            bool hasWorkflowStarted = await context.Purchase
+                .AsNoTracking()
+                .AnyAsync(p => p.Id == id && (p.Quotes.Count != 0 || p.RequestQuote != null));
+
+            if (hasWorkflowStarted)
+                return Conflict(new ApiResponse<string>(false, "No se puede eliminar una compra en proceso."));
+
+            int deletedRows = await context.Purchase.Where(p => p.Id == id).ExecuteDeleteAsync();
+            if (deletedRows == 0) return NotFound();
+
+            return Ok(new ApiResponse<string>(true, "Compra eliminada."));
+        }
+
+        [HttpPost("{purchaseId}/add-suppliers")]
+        public async Task<ActionResult<ApiResponse<string>>> AddSuppliersToQuote(int purchaseId, [FromBody] List<int> supplierIds)
+        {
+            var requestQuote = await context.RequestQuotes.FirstOrDefaultAsync(rq => rq.PurchaseId == purchaseId);
+            if (requestQuote == null) return NotFound(new ApiResponse<string>(false, "No existe solicitud."));
+
+            var existingIds = await context.RequestQuoteSuppliers
+                .Where(rqs => rqs.RequestQuoteId == requestQuote.Id)
+                .Select(rqs => rqs.SupplierId)
+                .ToListAsync();
+
+            var newIds = supplierIds.Except(existingIds).ToList();
+            if (!newIds.Any()) return BadRequest(new ApiResponse<string>(false, "Ya están en la lista."));
+
+            var newRelations = newIds.Select(sId => new RequestQuoteSupplier
+            {
+                RequestQuoteId = requestQuote.Id,
+                SupplierId = sId,
+                SentAt = DateTime.UtcNow
+            });
+
+            context.RequestQuoteSuppliers.AddRange(newRelations);
+            await context.SaveChangesAsync();
+
+            return Ok(new ApiResponse<string>(true, "Proveedores agregados."));
+        }
+    }
+}
