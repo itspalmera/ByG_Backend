@@ -5,21 +5,56 @@ using Microsoft.IdentityModel.Tokens;
 using System.Text;
 using ByG_Backend.src.Interfaces;
 using ByG_Backend.src.Services;
-using ByG_Backend.src.Data; // Asegúrate de que este namespace incluya tu DataSeeder
+using ByG_Backend.src.Data;
 using ByG_Backend.src.Models;
 using Resend;
 using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using QuestPDF.Infrastructure;
 using ByG_Backend.src.Options;
+using Npgsql; // Necesario para PostgreSQL
 
 var builder = WebApplication.CreateBuilder(args);
 
+// 1. Configuración de Licencia QuestPDF
 QuestPDF.Settings.License = LicenseType.Community;
 
-// Add services to the container.
-builder.Services.AddOpenApi();
+// ==================================================================
+// 2. CONFIGURACIÓN HÍBRIDA DE BASE DE DATOS (SQLite Local / Postgres Render)
+// ==================================================================
 
+if (builder.Environment.IsDevelopment())
+{
+    // --- MODO LOCAL (SQLite) ---
+    Console.WriteLine("--> Usando Base de Datos Local: SQLite");
+    builder.Services.AddDbContext<DataContext>(options =>
+        options.UseSqlite(builder.Configuration.GetConnectionString("DefaultConnection")));
+}
+else
+{
+    // --- MODO PRODUCCIÓN (Render/Supabase - PostgreSQL) ---
+    Console.WriteLine("--> Usando Base de Datos Producción: PostgreSQL (Supabase)");
+    
+    var connectionString = Environment.GetEnvironmentVariable("DATABASE_URL");
+    
+    // Parseo inteligente para convertir la URL de Supabase a formato .NET
+    if (!string.IsNullOrEmpty(connectionString))
+    {
+        connectionString = BuildConnectionString(connectionString);
+    }
+    else 
+    {
+        // Fallback por seguridad si no encuentra la variable
+        throw new Exception("No se encontró la variable de entorno DATABASE_URL en Producción.");
+    }
+
+    builder.Services.AddDbContext<DataContext>(options =>
+        options.UseNpgsql(connectionString));
+}
+
+// ==================================================================
+
+// 3. Configuración de Identity y JWT
 JwtSecurityTokenHandler.DefaultInboundClaimTypeMap.Clear();
 
 builder.Services
@@ -45,51 +80,43 @@ builder.Services.AddAuthentication(options =>
         {
             ValidateIssuer = true,
             ValidIssuer = builder.Configuration["JWT:Issuer"],
-
             ValidateAudience = true,
             ValidAudience = builder.Configuration["JWT:Audience"],
-
-            
-
             ValidateIssuerSigningKey = true,
             ValidateLifetime = true,
             IssuerSigningKey = new SymmetricSecurityKey(
                 Encoding.UTF8.GetBytes(builder.Configuration["JWT:SignInKey"]!)
             ),
-            // Usamos los tipos estándar que coinciden con TokenService.cs
-        
             NameClaimType = ClaimTypes.NameIdentifier,
             RoleClaimType = ClaimTypes.Role
         };
     });
 
+// 4. Servicios (Resend, OpenAPI, CORS)
+builder.Services.AddOpenApi();
 builder.Services.AddOptions();
 
-// Configurar Resend para envío de emails
-// Busca esta sección en tu Program.cs
 builder.Services.Configure<ResendClientOptions>(options =>
 {
     options.ApiToken = builder.Configuration["ResendAPIkey"];
 });
 builder.Services.AddHttpClient<IResend, ResendClient>();
 
-// Configurar Entity Framework con SQLite
-builder.Services.AddDbContext<DataContext>(options =>
-    options.UseSqlite(builder.Configuration.GetConnectionString("DefaultConnection")));
-
-// Agregar controladores
 builder.Services.AddControllers();
 builder.Services.AddScoped<ITokenServices, TokenService>();
 builder.Services.AddScoped<IUserRepository, UserRepository>();
 builder.Services.AddScoped<IEmailService, EmailService>();
 
-// CORS: Configuración flexible
 builder.Services.AddCors(options =>
 {
     options.AddPolicy("DefaultCorsPolicy", policy =>
     {
-        var allowedOrigins = builder.Configuration.GetSection("CorsSettings:AllowedOrigins").Get<string[]>() 
-                             ?? new[] { "http://localhost:3000" }; 
+        // En Producción lee de variable de entorno, en local usa localhost:3000
+        var allowedOriginsEnv = Environment.GetEnvironmentVariable("ALLOWED_ORIGINS");
+        var allowedOrigins = !string.IsNullOrEmpty(allowedOriginsEnv)
+            ? allowedOriginsEnv.Split(',')
+            : builder.Configuration.GetSection("CorsSettings:AllowedOrigins").Get<string[]>() 
+              ?? new[] { "http://localhost:3000" }; 
 
         policy.WithOrigins(allowedOrigins)
               .AllowAnyMethod()
@@ -108,45 +135,57 @@ var app = builder.Build();
 using (var scope = app.Services.CreateScope())
 {
     var services = scope.ServiceProvider;
-
     try 
     {
         var context = services.GetRequiredService<DataContext>();
         
-        // 1. Crea la BD y aplica migraciones pendientes
-        await context.Database.MigrateAsync(); 
+        if (app.Environment.IsDevelopment())
+        {
+            // En LOCAL (SQLite) usamos migraciones normales
+            await context.Database.MigrateAsync();
+        }
+        else
+        {
+            // En PRODUCCIÓN (Postgres) creamos la BD automáticamente
+            // Usamos EnsureCreatedAsync para evitar conflictos con las migraciones de SQLite
+            await context.Database.EnsureCreatedAsync();
+        }
 
-        // 2. Seeder de Usuarios y Roles (Identity)
+        // Semillas (Usuarios y Datos) - Funcionan igual en ambos
         await IdentitySeeder.SeedRolesAsync(services);
         await IdentitySeeder.SeedAdminUserAsync(services);
-
-        // 3. Seeder de Datos de Negocio (Compras, Proveedores, Cotizaciones)
-        //    Nota: Como este método no es async en el archivo que te di, se llama directo.
         DataSeeder.Seed(context);
         
-        Console.WriteLine("--> Datos de prueba (Compras/Proveedores) cargados correctamente.");
+        Console.WriteLine("--> Base de datos inicializada y sembrada correctamente.");
     }
     catch (Exception ex)
     {
-        Console.WriteLine($"Error durante el inicio y sembrado de datos: {ex.Message}");
+        Console.WriteLine($"Error crítico DB: {ex.Message}");
     }
 }
-
-
 // ==========================================
 
-// Configure the HTTP request pipeline.
-if (app.Environment.IsDevelopment())
-{
-    app.MapOpenApi();
-}
-
 app.UseCors("DefaultCorsPolicy");
-
 app.UseHttpsRedirection();
 app.UseAuthentication();
 app.UseAuthorization();
-
 app.MapControllers();
 
 app.Run();
+
+// --- FUNCION AUXILIAR PARA PARSEAR URL DE SUPABASE ---
+static string BuildConnectionString(string databaseUrl)
+{
+    var databaseUri = new Uri(databaseUrl);
+    var userInfo = databaseUri.UserInfo.Split(':');
+    var builder = new NpgsqlConnectionStringBuilder
+    {
+        Host = databaseUri.Host,
+        Port = databaseUri.Port,
+        Username = userInfo[0],
+        Password = userInfo[1],
+        Database = databaseUri.LocalPath.TrimStart('/'),
+        SslMode = SslMode.Disable // Para Session Pooler de Supabase puerto 5432
+    };
+    return builder.ToString();
+}
