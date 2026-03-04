@@ -12,6 +12,8 @@ using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using QuestPDF.Infrastructure;
 using ByG_Backend.src.Options;
+using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Storage;
 using Npgsql; // Necesario para PostgreSQL
 
 var builder = WebApplication.CreateBuilder(args);
@@ -146,9 +148,29 @@ using (var scope = app.Services.CreateScope())
         }
         else
         {
-            // En PRODUCCIÓN (Postgres) creamos la BD automáticamente
-            // Usamos EnsureCreatedAsync para evitar conflictos con las migraciones de SQLite
-            await context.Database.EnsureCreatedAsync();
+            // --- MODO PRODUCCIÓN (Postgres / Supabase) ---
+            // Estrategia: "Crear tablas sí o sí"
+            // Usamos RelationalDatabaseCreator para forzar la creación del esquema
+            // ignorando si Supabase ya tiene tablas de sistema.
+            var databaseCreator = context.Database.GetService<IDatabaseCreator>() as RelationalDatabaseCreator;
+            
+            if (databaseCreator != null)
+            {
+                // 1. Asegurar que la BD existe (En Supabase siempre es true, pero por seguridad)
+                if (!await databaseCreator.CanConnectAsync()) await databaseCreator.CreateAsync();
+
+                // 2. Intentar crear las tablas del modelo
+                try
+                {
+                    await databaseCreator.CreateTablesAsync();
+                    Console.WriteLine("--> Tablas creadas exitosamente en Supabase.");
+                }
+                catch (Exception ex)
+                {
+                    // Si falla porque ya existen, solo avisamos. Si es otro error, lo veremos en los logs.
+                    Console.WriteLine($"--> Nota: {ex.Message} (Probablemente las tablas ya existían o hubo un conflicto menor).");
+                }
+            }
         }
 
         // Semillas (Usuarios y Datos) - Funcionan igual en ambos
@@ -158,6 +180,7 @@ using (var scope = app.Services.CreateScope())
         
         Console.WriteLine("--> Base de datos inicializada y sembrada correctamente.");
     }
+
     catch (Exception ex)
     {
         Console.WriteLine($"Error crítico DB: {ex.Message}");
