@@ -4,7 +4,6 @@ using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.AspNetCore.Mvc;
-
 using ByG_Backend.src.Data;
 using ByG_Backend.src.DTOs;
 using ByG_Backend.src.Helpers;
@@ -14,13 +13,24 @@ using ByG_Backend.src.Models;
 
 namespace ByG_Backend.src.Controller
 {
+    /// <summary>
+    /// Controlador encargado de la gestión de Proveedores (Suppliers).
+    /// Proporciona operaciones CRUD, búsqueda avanzada por categorías y validaciones de integridad
+    /// para evitar duplicidad de registros.
+    /// </summary>
     [ApiController]
     [Route("api/[controller]")]
     public class SupplierController(DataContext context) : ControllerBase
     {
-        // ============================================================
-        // GET ALL - LISTADO PAGINADO (VERSION REFACTORIZADA)
-        // ============================================================
+        /// <summary>
+        /// Obtiene un listado paginado de proveedores con soporte para filtros de negocio y búsqueda dinámica.
+        /// </summary>
+        /// <remarks>
+        /// Permite filtrar por estado (activo/inactivo), categorías de productos y rango de fechas de registro.
+        /// La búsqueda dinámica abarca los campos RUT, Razón Social y Email.
+        /// </remarks>
+        /// <param name="queryParams">Parámetros que incluyen términos de búsqueda, filtros de categoría, estado y paginación.</param>
+        /// <returns>Respuesta paginada con el resumen de proveedores (SupplierSummaryDto).</returns>
         [HttpGet]
         public async Task<ActionResult<ApiResponse<PagedResponse<SupplierSummaryDto>>>> GetSuppliers([FromQuery] SupplierQueryParameters queryParams)
         {
@@ -28,7 +38,6 @@ namespace ByG_Backend.src.Controller
             {
                 var query = context.Supplier.AsNoTracking().AsQueryable();
 
-                // 1. FILTROS ESPECÍFICOS (Lógica de negocio)
                 if (queryParams.IsActive.HasValue)
                 {
                     query = query.Where(s => s.IsActive == queryParams.IsActive.Value);
@@ -51,18 +60,13 @@ namespace ByG_Backend.src.Controller
                     query = query.Where(s => s.RegisteredAt <= endDate);
                 }
 
-                // 2. BÚSQUEDA DINÁMICA (DRY)
-                // Busca coincidencias en RUT, Razón Social y Email automáticamente
                 query = query.ApplySearch(queryParams.Search, "Rut", "BusinessName", "Email");
 
-                // 3. ORDENAMIENTO DINÁMICO (DRY)
-                // Por defecto ordena por fecha de registro descendente
                 query = query.ApplySorting(queryParams.SortBy, "RegisteredAt:desc");
 
-                // 4. PAGINACIÓN GENÉRICA
                 var pagedResult = await query.ToPagedResponseAsync(queryParams.PageNumber, queryParams.PageSize);
 
-                // 5. MAPEO MANUAL A DTO (Items -> SummaryDto)
+                // 5. PROYECCIÓN A DTO DE RESUMEN
                 var dtos = pagedResult.Items.Select(s => new SupplierSummaryDto(
                     s.Id,
                     s.Rut,
@@ -91,9 +95,11 @@ namespace ByG_Backend.src.Controller
             }
         }
 
-        // ============================================================
-        // GET BY ID
-        // ============================================================
+        /// <summary>
+        /// Obtiene la información detallada de un proveedor por su ID.
+        /// </summary>
+        /// <param name="id">ID único del proveedor.</param>
+        /// <returns>Detalle del proveedor mapeado a SupplierDetailDto.</returns>
         [HttpGet("{id}")]
         public async Task<ActionResult<ApiResponse<SupplierDetailDto>>> GetSupplierById(int id)
         {
@@ -114,9 +120,11 @@ namespace ByG_Backend.src.Controller
             return Ok(new ApiResponse<SupplierDetailDto>(true, "Proveedor obtenido.", supplier.ToDetailDto()));
         }
 
-        // ============================================================
-        // CREAR PROVEEDOR
-        // ============================================================
+        /// <summary>
+        /// Registra un nuevo proveedor en el sistema tras validar que el RUT o Email no existan previamente.
+        /// </summary>
+        /// <param name="dto">DTO con la información necesaria para crear el proveedor.</param>
+        /// <returns>El proveedor recién creado con su respectiva URI de ubicación.</returns>
         [HttpPost]
         public async Task<ActionResult<ApiResponse<SupplierDetailDto>>> CreateSupplier([FromBody] SupplierCreateDto dto)
         {
@@ -137,9 +145,11 @@ namespace ByG_Backend.src.Controller
                 new ApiResponse<SupplierDetailDto>(true, "Proveedor creado exitosamente.", newSupplier.ToDetailDto()));
         }
 
-        // ============================================================
-        // ACTUALIZAR PROVEEDOR
-        // ============================================================
+        /// <summary>
+        /// Actualiza los datos de un proveedor existente, verificando que los nuevos RUT o Email no entren en conflicto con otros registros.
+        /// </summary>
+        /// <param name="id">ID del proveedor a actualizar.</param>
+        /// <param name="dto">Nuevos datos del proveedor.</param>
         [HttpPut("{id}")]
         public async Task<ActionResult<ApiResponse<SupplierDetailDto>>> UpdateSupplier(int id, [FromBody] SupplierUpdateDto dto)
         {
@@ -159,9 +169,11 @@ namespace ByG_Backend.src.Controller
             return Ok(new ApiResponse<SupplierDetailDto>(true, "Actualizado correctamente.", supplier.ToDetailDto()));
         }
 
-        // ============================================================
-        // TOGGLE STATUS & DELETE
-        // ============================================================
+        /// <summary>
+        /// Cambia el estado de activación (IsActive) de un proveedor.
+        /// </summary>
+        /// <param name="id">ID del proveedor.</param>
+        /// <returns>El nuevo estado de activación.</returns>
         [HttpPatch("{id}/toggle-status")]
         public async Task<ActionResult<ApiResponse<bool>>> ToggleSupplierStatus(int id)
         {
@@ -174,6 +186,11 @@ namespace ByG_Backend.src.Controller
             return Ok(new ApiResponse<bool>(true, $"Proveedor {(supplier.IsActive ? "activado" : "desactivado")}.", supplier.IsActive));
         }
 
+        /// <summary>
+        /// Elimina un proveedor de forma definitiva solo si no posee historial de cotizaciones o solicitudes asociadas.
+        /// </summary>
+        /// <param name="id">ID del proveedor a eliminar.</param>
+        /// <returns>Confirmación de la eliminación o Conflicto si existen dependencias.</returns>
         [HttpDelete("{id}")]
         public async Task<ActionResult<ApiResponse<string>>> DeleteSupplier(int id)
         {
