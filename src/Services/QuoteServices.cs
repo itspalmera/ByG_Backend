@@ -5,22 +5,34 @@ using QuestPDF.Fluent;
 using QuestPDF.Helpers;
 using QuestPDF.Infrastructure;
 using ByG_Backend.src.Models;
-using ByG_Backend.src.Options; // <- tu clase CompanyInfoOptions
+using ByG_Backend.src.Options;
 
 namespace ByG_Backend.src.Services
 {
+    /// <summary>
+    /// Servicio encargado de la generación de documentos PDF para solicitudes de cotización.
+    /// Implementa <see cref="IDocument"/> de QuestPDF para definir la estructura visual,
+    /// encabezados, tablas de ítems y firmas del documento.
+    /// </summary>
     public class QuoteServices : IDocument
     {
         private readonly Purchase _compra;
         private readonly RequestQuote _solicitud;
         private readonly CompanyInfoOptions _company;
-
-        // Opcional: logo
         private readonly byte[]? _logoBytes;
 
-        // Ajusta esto para que la tabla quede como tu plantilla (cantidad de filas visibles)
+        /// <summary>
+        /// Cantidad de filas mínimas que se mostrarán en la tabla de ítems para mantener la estética de la plantilla.
+        /// </summary>
         private const int TotalRowsDesired = 12;
 
+        /// <summary>
+        /// Inicializa una nueva instancia del generador de documentos.
+        /// </summary>
+        /// <param name="compra">Modelo de la compra con los ítems a cotizar.</param>
+        /// <param name="solicitud">Modelo de la solicitud que contiene el número de RFQ y fechas.</param>
+        /// <param name="company">Opciones con la información legal y de contacto de la empresa.</param>
+        /// <param name="logoBytes">Opcional: Arreglo de bytes de la imagen del logo corporativo.</param>
         public QuoteServices(Purchase compra, RequestQuote solicitud, CompanyInfoOptions company, byte[]? logoBytes = null)
         {
             _compra = compra;
@@ -29,8 +41,15 @@ namespace ByG_Backend.src.Services
             _logoBytes = logoBytes;
         }
 
+        /// <summary>
+        /// Define los metadatos del documento PDF generado.
+        /// </summary>
         public DocumentMetadata GetMetadata() => DocumentMetadata.Default;
 
+        /// <summary>
+        /// Orquestador principal de la composición del PDF.
+        /// Define el tamaño de página (A4), márgenes, tipografía y estructura por bloques.
+        /// </summary>
         public void Compose(IDocumentContainer container)
         {
             container.Page(page =>
@@ -40,18 +59,15 @@ namespace ByG_Backend.src.Services
                 page.PageColor(Colors.White);
                 page.DefaultTextStyle(x => x.FontSize(9).FontFamily(Fonts.Arial));
 
-                // Marco exterior de toda la plantilla
+                // Marco exterior y contenedor principal
                 page.Content()
                     .Border(1).BorderColor(Colors.Black)
                     .Padding(16)
                     .Column(root =>
                     {
-                        // =========================
-                        // 1) HEADER (Logo + Caja derecha)
-                        // =========================
+                        // 1) HEADER: Logo o Nombre de Empresa y Cuadro de Título del Documento
                         root.Item().Row(row =>
                         {
-                            // Logo / Nombre (izquierda)
                             row.RelativeItem().Column(col =>
                             {
                                 if (_logoBytes != null && _logoBytes.Length > 0)
@@ -64,7 +80,7 @@ namespace ByG_Backend.src.Services
                                 }
                             });
 
-                            // Caja derecha tipo timbre
+                            // Cuadro de identificación del documento (Folio y Fecha)
                             row.ConstantItem(210).Border(1).BorderColor(Colors.Black).Column(col =>
                             {
                                 col.Item()
@@ -85,9 +101,7 @@ namespace ByG_Backend.src.Services
                             });
                         });
 
-                        // =========================
-                        // 2) BLOQUE DATOS FIJOS (Sres/Dirección/Correo/Rut/Fono)
-                        // =========================
+                        // 2) DATOS DE LA EMPRESA: Información de contacto y RUT
                         root.Item().PaddingTop(12)
                             .Border(1).BorderColor(Colors.Black)
                             .Padding(10)
@@ -112,10 +126,7 @@ namespace ByG_Backend.src.Services
                                 });
                             });
 
-
-                        // =========================
-                        // 4) TABLA PRINCIPAL (con filas vacías de relleno)
-                        // =========================
+                        // 3) TABLA DE ÍTEMS: Listado de productos con celdas de relleno
                         root.Item().PaddingTop(14).Table(table =>
                         {
                             table.ColumnsDefinition(columns =>
@@ -139,35 +150,27 @@ namespace ByG_Backend.src.Services
                             var items = _compra.PurchaseItems?.ToList() ?? new List<PurchaseItem>();
                             int idx = 1;
 
+                            // Renderizado de ítems reales
                             foreach (var it in items)
                             {
                                 table.Cell().Element(CellBody).AlignCenter().Text(idx.ToString());
 
-                                // NOMBRE (Name + BrandModel + Size)
                                 table.Cell().Element(CellBody).Text(t =>
                                 {
                                     t.Span(it.Name ?? "").Bold();
-
                                     if (!string.IsNullOrWhiteSpace(it.BrandModel))
                                         t.Span($"\nMarca/Modelo: {it.BrandModel}").FontSize(8);
-
                                     if (!string.IsNullOrWhiteSpace(it.Size))
                                         t.Span($"\nMedida/Talla: {it.Size}").FontSize(8);
                                 });
 
-                                // DESCRIPCIÓN
                                 table.Cell().Element(CellBody).Text(it.Description ?? "");
-
-                                // UNIDAD
                                 table.Cell().Element(CellBody).AlignCenter().Text(it.Unit ?? "");
-
-                                // CANTIDAD
                                 table.Cell().Element(CellBody).AlignCenter().Text(it.Quantity.ToString());
-
                                 idx++;
                             }
 
-                            // Relleno hasta TotalRowsDesired (para que se vea como plantilla)
+                            // Renderizado de filas vacías para completar la plantilla visual
                             for (int k = items.Count; k < TotalRowsDesired; k++)
                             {
                                 table.Cell().Element(CellBody).Text("");
@@ -178,9 +181,7 @@ namespace ByG_Backend.src.Services
                             }
                         });
 
-                        // =========================
-                        // 5) OBSERVACIONES (si hay)
-                        // =========================
+                        // 4) OBSERVACIONES: Sección condicional
                         if (!string.IsNullOrWhiteSpace(_compra.Observations))
                         {
                             root.Item().PaddingTop(10)
@@ -193,9 +194,7 @@ namespace ByG_Backend.src.Services
                                 });
                         }
 
-                        // =========================
-                        // 6) FIRMA (centrada, como plantilla)
-                        // =========================
+                        // 5) SECCIÓN DE FIRMA: Autorización del documento
                         root.Item().PaddingTop(22)
                             .AlignCenter()
                             .Column(firma =>
@@ -208,29 +207,30 @@ namespace ByG_Backend.src.Services
             });
         }
 
+        /// <summary>
+        /// Determina el número de documento priorizando el número de solicitud (RFQ).
+        /// </summary>
         private string GetDocumentNumber()
         {
-            // RFQ-2026-003 (lo principal)
             if (!string.IsNullOrWhiteSpace(_solicitud?.Number))
                 return _solicitud.Number;
-
-            // fallback: folio compra si faltara
             return _compra?.PurchaseNumber ?? "";
         }
 
+        /// <summary>
+        /// Obtiene la fecha de emisión del documento basándose en la creación de la solicitud o la compra.
+        /// </summary>
         private DateTime GetDocumentDate()
         {
-            // Evita 01-01-0001
             if (_solicitud != null && _solicitud.CreatedAt != default)
                 return _solicitud.CreatedAt;
-
             if (_compra != null && _compra.RequestDate != default)
                 return _compra.RequestDate;
-
             return DateTime.Now;
         }
 
-        // ===== Estilos =====
+        // ===== Helpers de Estilo de Celdas =====
+
         private static IContainer CellHeader(IContainer c) =>
             c.Border(1).BorderColor(Colors.Black)
              .Background("#D0CECE")
