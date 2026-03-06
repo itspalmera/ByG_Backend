@@ -6,7 +6,6 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
-
 using ByG_Backend.src.Data;
 using ByG_Backend.src.DTOs;
 using ByG_Backend.src.Helpers;
@@ -16,10 +15,15 @@ using ByG_Backend.src.Models;
 using ByG_Backend.src.Options;
 using ByG_Backend.src.Interfaces;
 using ByG_Backend.src.RequestHelpers;
-using QuestPDF.Fluent; // Indispensable para la paginación genérica
+using QuestPDF.Fluent;
 
 namespace ByG_Backend.src.Controller
 {
+    /// <summary>
+    /// Controlador encargado de gestionar las Solicitudes de Cotización (Request Quotes).
+    /// Proporciona funcionalidades para el listado, visualización, generación de archivos PDF 
+    /// y el envío de estos documentos a múltiples proveedores vía correo electrónico.
+    /// </summary>
     [ApiController]
     [Route("api/Request")]
     public class RequestQuoteController(
@@ -33,9 +37,16 @@ namespace ByG_Backend.src.Controller
         private readonly CompanyInfoOptions _company = companyOptions.Value;
         private readonly IEmailService _emailService = emailService;
 
-        // ============================================================
-        // GET ALL (Filtros + Paginación Genérica DRY)
-        // ============================================================
+        /// <summary>
+        /// Obtiene un listado paginado de solicitudes de cotización con filtros aplicables.
+        /// </summary>
+        /// <param name="status">Filtro opcional por estado de la solicitud.</param>
+        /// <param name="searchTerm">Término de búsqueda para filtrar resultados.</param>
+        /// <param name="orderBy">Campo de ordenamiento dinámico.</param>
+        /// <param name="purchaseId">Filtro opcional para obtener solicitudes de una compra específica.</param>
+        /// <param name="pageNumber">Número de la página a recuperar.</param>
+        /// <param name="pageSize">Tamaño de la página de resultados.</param>
+        /// <returns>Respuesta paginada con DTOs de solicitudes de cotización.</returns>
         [HttpGet]
         public async Task<ActionResult<ApiResponse<PagedResponse<RequestQuoteDto>>>> GetAll(
             [FromQuery] string? status,
@@ -52,26 +63,18 @@ namespace ByG_Backend.src.Controller
                     .Include(q => q.RequestQuoteSuppliers)
                     .AsQueryable();
 
-                // 1. Filtros
-
-
                 if (!string.IsNullOrWhiteSpace(purchaseId))
                 {
                     query = query.Where(q => q.PurchaseId.ToString() == purchaseId);
                 }
 
                 query = query.ApplySearch(searchTerm, "Status");
-
-                // 2. Ordenamiento
                 query = query.ApplySorting(orderBy, "CreatedAt");
 
-                // 3. USO DE LA EXTENSIÓN GENÉRICA
                 var pagedResult = await query.ToPagedResponseAsync(pageNumber, pageSize);
 
-                // 4. Mapeo a DTOs
                 var dtos = pagedResult.Items.Select(RequestQuoteMapper.RequestQuoteToRequestQuoteDto).ToList();
 
-                // 5. Envolver en el formato final de PagedResponse de DTOs
                 var finalResponse = new PagedResponse<RequestQuoteDto>(
                     dtos, 
                     pagedResult.TotalItems, 
@@ -92,9 +95,11 @@ namespace ByG_Backend.src.Controller
             }
         }
 
-        // ============================================================
-        // GET BY ID
-        // ============================================================
+        /// <summary>
+        /// Obtiene una solicitud de cotización específica por su ID.
+        /// </summary>
+        /// <param name="id">ID de la solicitud.</param>
+        /// <returns>La solicitud encontrada incluyendo sus proveedores asociados.</returns>
         [HttpGet("{id:int}")]
         public async Task<ActionResult<ApiResponse<RequestQuote>>> GetById(int id)
         {
@@ -109,10 +114,11 @@ namespace ByG_Backend.src.Controller
             return Ok(new ApiResponse<RequestQuote>(true, "Solicitud encontrada", requestQuote));
         }
 
-        // ============================================================
-        // PDF & EMAIL SERVICES (Lógica de Negocio)
-        // ============================================================
-
+        /// <summary>
+        /// Genera el contenido binario de un PDF de cotización a partir de datos temporales (DTO).
+        /// </summary>
+        /// <param name="request">Datos estructurados de la compra y la solicitud.</param>
+        /// <returns>Arreglo de bytes que representa el archivo PDF.</returns>
         [HttpPost("create")]
         public byte[] GenerarCotizacionPdf([FromBody] PdfRequestDto request)
         {
@@ -121,6 +127,11 @@ namespace ByG_Backend.src.Controller
             return documento.GeneratePdf(); 
         }
 
+        /// <summary>
+        /// Genera y permite la descarga del archivo PDF de una solicitud registrada en la base de datos.
+        /// </summary>
+        /// <param name="id">ID de la solicitud de cotización.</param>
+        /// <returns>Archivo PDF para descarga.</returns>
         [HttpGet("{id:int}/pdf")]
         public async Task<IActionResult> DownloadRequestQuotePdf(int id)
         {
@@ -136,8 +147,16 @@ namespace ByG_Backend.src.Controller
             return File(pdf, "application/pdf", $"Solicitud_{rq.Number}.pdf");
         }
 
+        /// <summary>
+        /// Genera un PDF y lo envía concurrentemente a una lista de correos electrónicos.
+        /// </summary>
+        /// <remarks>
+        /// Utiliza <see cref="IEmailService"/> para procesar los envíos en paralelo mediante Task.WhenAll.
+        /// </remarks>
+        /// <param name="request">DTO que contiene la lista de destinatarios y la información para el PDF.</param>
+        /// <returns>Resumen del resultado del envío múltiple.</returns>
         [HttpPost("SendQuotePdf")]
-        public async Task<IActionResult> EnviarCotizacionMultiple([FromBody] SendPdfRequestDto request)
+        public async Task<IActionResult> SentQuoteMultiple([FromBody] SendPdfRequestDto request)
         {
             if (request.Emails == null || !request.Emails.Any())
                 return BadRequest("Debes proporcionar al menos un correo.");
