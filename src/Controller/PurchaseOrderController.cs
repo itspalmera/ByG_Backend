@@ -4,7 +4,6 @@ using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.AspNetCore.Mvc;
-
 using ByG_Backend.src.Data;
 using ByG_Backend.src.DTOs;
 using ByG_Backend.src.Helpers;
@@ -14,13 +13,22 @@ using ByG_Backend.src.Models;
 
 namespace ByG_Backend.src.Controller
 {
+    /// <summary>
+    /// Controlador encargado de la gestión de Órdenes de Compra (Purchase Orders).
+    /// </summary>
     [ApiController]
     [Route("api/[controller]")]
     public class PurchaseOrderController(DataContext context) : ControllerBase
     {
-        // ============================================================
-        // GET ALL - LISTADO PAGINADO (VERSION REFACTORIZADA)
-        // ============================================================
+        /// <summary>
+        /// Obtiene un listado paginado de todas las órdenes de compra.
+        /// </summary>
+        /// <remarks>
+        /// Incluye la información relacionada de la Solicitud de Compra y el Proveedor asociado a la cotización.
+        /// Soporta búsqueda por número de orden y estado, además de ordenamiento dinámico.
+        /// </remarks>
+        /// <param name="queryParams">Parámetros de paginación, filtros de fecha/estado y términos de búsqueda.</param>
+        /// <returns>Respuesta paginada con el resumen de las órdenes de compra.</returns>
         [HttpGet]
         public async Task<ActionResult<ApiResponse<PagedResponse<PurchaseOrderSummaryDto>>>> GetAll([FromQuery] PurchaseOrderQueryParameters queryParams)
         {
@@ -33,7 +41,6 @@ namespace ByG_Backend.src.Controller
                         .ThenInclude(q => q.Supplier)
                     .AsQueryable();
 
-                // 1. FILTROS DE NEGOCIO (Fechas y Estado)
                 if (!string.IsNullOrWhiteSpace(queryParams.Status))
                 {
                     query = query.Where(po => po.Status.ToLower() == queryParams.Status.ToLower().Trim());
@@ -50,18 +57,12 @@ namespace ByG_Backend.src.Controller
                     query = query.Where(po => po.Date <= endDate);
                 }
 
-                // 2. BÚSQUEDA DINÁMICA (DRY)
-                // Nota: Para campos anidados como Purchase.ProjectName, ApplySearch 
-                // requiere que el string sea exacto al nombre de la propiedad.
                 query = query.ApplySearch(queryParams.Search, "OrderNumber", "Status");
 
-                // 3. ORDENAMIENTO DINÁMICO (DRY)
                 query = query.ApplySorting(queryParams.SortBy, "Date:desc");
 
-                // 4. PAGINACIÓN GENÉRICA
                 var pagedResult = await query.ToPagedResponseAsync(queryParams.PageNumber, queryParams.PageSize);
 
-                // 5. MAPEO MANUAL A DTO (Items -> SummaryDto)
                 var dtos = pagedResult.Items.Select(po => po.ToSummaryDto()).ToList();
 
                 var response = new PagedResponse<PurchaseOrderSummaryDto>(
@@ -79,16 +80,24 @@ namespace ByG_Backend.src.Controller
             }
         }
 
-        // ============================================================
-        // CREAR ORDEN DE COMPRA (Transaccional)
-        // ============================================================
+        /// <summary>
+        /// Crea una nueva Orden de Compra a partir de una Cotización seleccionada.
+        /// </summary>
+        /// <remarks>
+        /// El proceso es transaccional y realiza lo siguiente:
+        /// 1. Valida que la Solicitud de Compra no tenga ya una OC asignada.
+        /// 2. Genera un número correlativo de OC basado en el año actual (ej. OC-2026-0001).
+        /// 3. Calcula Subtotal, IVA (19%) y Total basado en los ítems de la cotización.
+        /// 4. Actualiza el estado de la Cotización a "Aprobada" y de la Solicitud a "Orden Generada".
+        /// </remarks>
+        /// <param name="dto">DTO con el ID de la Solicitud y el ID de la Cotización aprobada.</param>
+        /// <returns>El detalle de la Orden de Compra generada.</returns>
         [HttpPost]
         public async Task<ActionResult<ApiResponse<PurchaseOrderDetailDto>>> CreatePurchaseOrder([FromBody] CreatePurchaseOrderDto dto)
         {
             using var transaction = await context.Database.BeginTransactionAsync();
             try
             {
-                // 1. Validaciones
                 var purchase = await context.Purchase
                     .Include(p => p.PurchaseOrder)
                     .FirstOrDefaultAsync(p => p.Id == dto.PurchaseId);
@@ -103,20 +112,17 @@ namespace ByG_Backend.src.Controller
                 if (quote == null || quote.PurchaseId != dto.PurchaseId)
                     return BadRequest(new ApiResponse<PurchaseOrderDetailDto>(false, "Cotización inválida para esta compra."));
 
-                // 2. Generar Número de OC
                 int count = await context.PurchaseOrder.CountAsync(po => po.Date.Year == DateTime.UtcNow.Year);
                 string orderNumber = $"OC-{DateTime.UtcNow.Year}-{(count + 1):D4}";
 
-                // 3. Mapear y Calcular Totales (Snapshot)
                 var newOrder = dto.ToModelFromCreate(orderNumber);
                 
                 decimal subTotal = quote.QuoteItems?.Sum(item => (item.UnitPrice ?? 0) * item.Quantity) ?? 0;
                 newOrder.SubTotal = subTotal;
-                newOrder.TaxRate = 19m;
+                newOrder.TaxRate = 19m; 
                 newOrder.TaxAmount = subTotal * 0.19m;
                 newOrder.TotalAmount = subTotal + newOrder.TaxAmount;
 
-                // 4. Actualizar Estados
                 quote.Status = "Aprobada";
                 purchase.Status = "Orden Generada";
                 purchase.UpdatedAt = DateTime.UtcNow;
@@ -125,7 +131,6 @@ namespace ByG_Backend.src.Controller
                 await context.SaveChangesAsync();
                 await transaction.CommitAsync();
 
-                // 5. Retorno con carga completa
                 var completeOrder = await context.PurchaseOrder
                     .Include(po => po.Purchase)
                     .Include(po => po.Quote).ThenInclude(q => q.Supplier)
@@ -142,9 +147,11 @@ namespace ByG_Backend.src.Controller
             }
         }
 
-        // ============================================================
-        // OBTENER POR ID (Detalle)
-        // ============================================================
+        /// <summary>
+        /// Obtiene el detalle de una Orden de Compra por su ID.
+        /// </summary>
+        /// <param name="id">ID único de la Orden de Compra.</param>
+        /// <returns>Detalle completo incluyendo ítems y proveedor.</returns>
         [HttpGet("{id}")]
         public async Task<ActionResult<ApiResponse<PurchaseOrderDetailDto>>> GetPurchaseOrderById(int id)
         {
