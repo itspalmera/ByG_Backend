@@ -217,7 +217,7 @@ namespace ByG_Backend.src.Controller
 
                 string nombreArchivo = $"OC_{order.OrderNumber}.pdf";
 
-                await _emailService.SendPdfDocumentAsync(
+                await _emailService.SendPdfPurchaseOrderAsync(
                     supplierEmail,
                     pdfBytes,
                     nombreArchivo
