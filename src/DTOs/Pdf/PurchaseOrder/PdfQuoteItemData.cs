@@ -5,16 +5,45 @@ using System.Threading.Tasks;
 
 namespace ByG_Backend.src.DTOs
 {
+    /// <summary>
+    /// Representa el detalle individual de un producto o servicio dentro de un reporte PDF.
+    /// Diseñado para ser mapeado directamente a las filas de la tabla de ítems en el documento impreso.
+    /// </summary>
     public class PdfQuoteItemData
     {
-        public string Description { get; set; } = null!; // descripción del producto
-    public int Quantity { get; set; }            // cantidad
-    public string Unit { get; set; } = null!;        // unidad (kg, unidad, metro, etc)
+        /// <summary>
+        /// Descripción detallada o nombre del producto que se visualizará en la columna principal del PDF.
+        /// </summary>
+        public string Description { get; set; } = null!;
 
-    public string? Brand { get; set; }               // marca (opcional)
-    public string? Model { get; set; }               // modelo (opcional)
+        /// <summary>
+        /// Cantidad de unidades solicitadas o cotizadas.
+        /// </summary>
+        public int Quantity { get; set; }
 
-    public decimal UnitPrice { get; set; }           // precio unitario
-    public decimal Total { get; set; }  
+        /// <summary>
+        /// Unidad de medida (ej: "kg", "unidad", "metro"). Proporciona contexto a la cantidad.
+        /// </summary>
+        public string Unit { get; set; } = null!;
+
+        /// <summary>
+        /// Marca específica del producto. Ayuda a garantizar que se entregue el material correcto en terreno.
+        /// </summary>
+        public string? Brand { get; set; }
+
+        /// <summary>
+        /// Modelo o referencia técnica del fabricante para el ítem.
+        /// </summary>
+        public string? Model { get; set; }
+
+        /// <summary>
+        /// Valor monetario por unidad, formateado según la moneda de la orden.
+        /// </summary>
+        public decimal UnitPrice { get; set; }
+
+        /// <summary>
+        /// Monto total de la línea (usualmente Quantity * UnitPrice).
+        /// </summary>
+        public decimal Total { get; set; } 
     }
 }
