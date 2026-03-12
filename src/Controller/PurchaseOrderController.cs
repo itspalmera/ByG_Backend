@@ -10,6 +10,10 @@ using ByG_Backend.src.Helpers;
 using ByG_Backend.src.RequestHelpers;
 using ByG_Backend.src.Mappers;
 using ByG_Backend.src.Models;
+using ByG_Backend.src.Services;
+using QuestPDF.Fluent;
+using ByG_Backend.src.Options;
+using Microsoft.Extensions.Options;
 
 namespace ByG_Backend.src.Controller
 {
@@ -18,8 +22,11 @@ namespace ByG_Backend.src.Controller
     /// </summary>
     [ApiController]
     [Route("api/[controller]")]
-    public class PurchaseOrderController(DataContext context) : ControllerBase
+    public class PurchaseOrderController(DataContext context, IOptions<CompanyInfoOptions> companyOptions) : ControllerBase
     {
+
+        private readonly CompanyInfoOptions _company = companyOptions.Value;
+        
         /// <summary>
         /// Obtiene un listado paginado de todas las órdenes de compra.
         /// </summary>
@@ -165,6 +172,27 @@ namespace ByG_Backend.src.Controller
             if (purchaseOrder == null) return NotFound(new ApiResponse<string>(false, "No encontrada."));
 
             return Ok(new ApiResponse<PurchaseOrderDetailDto>(true, "OC obtenida.", purchaseOrder.ToDetailDto()));
+        }
+
+
+        [HttpGet("{id}/pdf")]
+        public async Task<IActionResult> GeneratePurchaseOrderPdf(int id)
+        {
+            var order = await context.PurchaseOrder
+                .Include(o => o.Quote)
+                    .ThenInclude(q => q.QuoteItems)
+                .Include(o => o.Quote)
+                    .ThenInclude(q => q.Supplier)
+                .FirstOrDefaultAsync(o => o.Id == id);
+
+            if (order == null)
+                return NotFound();
+
+            var document = new PurchaseOrderServices(order, _company);
+
+            var pdf = document.GeneratePdf();
+
+            return File(pdf, "application/pdf", $"OC_{order.OrderNumber}.pdf");
         }
     }
 }
