@@ -2,10 +2,8 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
-
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
-
 using ByG_Backend.src.Models;
 using ByG_Backend.src.Services;
 using ByG_Backend.src.Interfaces;
@@ -16,23 +14,42 @@ using Microsoft.AspNetCore.Authorization;
 
 namespace ByG_Backend.src.Controller
 {
+    /// <summary>
+    /// Controlador encargado de gestionar los procesos de autenticación y registro de usuarios.
+    /// Utiliza ASP.NET Core Identity para la gestión de cuentas, roles y seguridad.
+    /// </summary>
     [ApiController]
     [Route("api/[controller]")]
-    public class AuthController( ILogger<AuthController> logger, UserManager<User> userManager, ITokenServices tokenService, RoleManager<IdentityRole> roleManager) : ControllerBase
+    public class AuthController(ILogger<AuthController> logger, UserManager<User> userManager, ITokenServices tokenService, RoleManager<IdentityRole> roleManager) : ControllerBase
     {
         private readonly ILogger<AuthController> _logger = logger;
         private readonly UserManager<User> _userManager = userManager;
         private readonly ITokenServices _tokenService = tokenService;
         private readonly RoleManager<IdentityRole> _roleManager = roleManager;
 
-        
-        //[Authorize(Roles = "Admin")]
+        /// <summary>
+        /// Registra un nuevo usuario en el sistema.
+        /// </summary>
+        /// <remarks>
+        /// El proceso incluye:
+        /// 1. Validación de anotaciones de datos en el DTO.
+        /// 2. Verificación de coincidencia de contraseñas.
+        /// 3. Comprobación de existencia previa del correo y del rol solicitado.
+        /// 4. Creación del usuario en la base de datos.
+        /// 5. Asignación del rol especificado (o "User" por defecto).
+        /// </remarks>
+        /// <param name="newUser">Objeto DTO con los datos de registro (Email, Password, Role, etc.).</param>
+        /// <returns>
+        /// 200 (OK): Usuario creado con éxito y sus datos básicos.
+        /// 400 (BadRequest): Datos inválidos, contraseñas no coincidentes o error en Identity.
+        /// 409 (Conflict): El correo electrónico ya está en uso.
+        /// 500 (InternalServerError): Errores durante la asignación del rol o excepciones generales.
+        /// </returns>
         [HttpPost("register")]
         public async Task<IActionResult> Register([FromBody] RegisterDto newUser)
         {
             try
             {
-                // 1. Validar el modelo (Data Annotations de RegisterDto)
                 if (!ModelState.IsValid)
                 {
                     var errors = ModelState.Values
@@ -47,14 +64,12 @@ namespace ByG_Backend.src.Controller
                         errors));
                 }
 
-                // 2. Validar contraseñas
                 if (string.IsNullOrWhiteSpace(newUser.Password) || string.IsNullOrWhiteSpace(newUser.ConfirmPassword))
                     return BadRequest(new ApiResponse<string>(false, "La contraseña y la confirmación son requeridas"));
 
                 if (newUser.Password != newUser.ConfirmPassword)
                     return BadRequest(new ApiResponse<string>(false, "Las contraseñas no coinciden"));
 
-                // 3. Verificar si el correo ya existe
                 var existingUser = await _userManager.FindByEmailAsync(newUser.Email);
                 if (existingUser != null)
                     return Conflict(new ApiResponse<string>(false, "Ya existe una cuenta con este correo electrónico"));
@@ -67,13 +82,10 @@ namespace ByG_Backend.src.Controller
                     return BadRequest(new ApiResponse<string>(false, $"El rol '{roleToAssign}' no existe en el sistema."));
                 }
 
-                // 4. Mapear DTO a Modelo de Usuario
                 var user = UserMapper.RegisterToUser(newUser);
 
-                // 5. Intentar crear el usuario en Identity
                 var createUser = await _userManager.CreateAsync(user, newUser.Password);
 
-                // 6. VERIFICAR ÉXITO DE CREACIÓN ANTES DE SEGUIR
                 if (!createUser.Succeeded)
                 {
                     var identityErrors = createUser.Errors.Select(e => e.Description).ToList();
@@ -84,16 +96,12 @@ namespace ByG_Backend.src.Controller
                         identityErrors));
                 }
 
-                // 7. ASIGNACIÓN DE ROL (Ahora que el usuario existe en la DB)
-                // Si el DTO no trae rol, asignamos "User" por defecto
                 var roleToAssigna = string.IsNullOrWhiteSpace(newUser.Role) ? "User" : newUser.Role;
                 
                 var roleResult = await _userManager.AddToRoleAsync(user, roleToAssigna);
 
                 if (!roleResult.Succeeded)
                 {
-                    // Nota: El usuario ya se creó, pero el rol falló. 
-                    // Podrías decidir si borrar al usuario o devolver un error específico.
                     var roleErrors = roleResult.Errors.Select(e => e.Description).ToList();
                     return StatusCode(500, new ApiResponse<string>(
                         false,
@@ -102,7 +110,6 @@ namespace ByG_Backend.src.Controller
                         roleErrors));
                 }
 
-                // 8. Respuesta exitosa
                 var userDto = UserMapper.UserToNewUserDto(user);
                 return Ok(new ApiResponse<NewUserDto>(true, "Usuario registrado exitosamente", userDto));
             }
@@ -118,6 +125,23 @@ namespace ByG_Backend.src.Controller
 
 
 
+        /// <summary>
+        /// Autentica a un usuario y genera un token JWT de acceso.
+        /// </summary>
+        /// <remarks>
+        /// El proceso incluye:
+        /// 1. Verificación del correo electrónico.
+        /// 2. Comprobación de si la cuenta está activa (IsActive).
+        /// 3. Validación de la contraseña.
+        /// 4. Actualización del último acceso ajustado a la zona horaria de Chile.
+        /// 5. Generación de Token JWT con los roles del usuario.
+        /// </remarks>
+        /// <param name="loginDto">DTO con las credenciales (Email y Password).</param>
+        /// <returns>
+        /// 200 (OK): Login exitoso, devuelve el token y datos del usuario.
+        /// 401 (Unauthorized): Credenciales incorrectas o cuenta deshabilitada.
+        /// 500 (InternalServerError): Excepciones generales durante el proceso.
+        /// </returns>
         [HttpPost("login")]
         public async Task<IActionResult> Login([FromBody] LoginDto loginDto)
         {
@@ -133,7 +157,6 @@ namespace ByG_Backend.src.Controller
                     return BadRequest(new ApiResponse<string>(false, "Datos inválidos", null, errors));
                 }
 
-                // Sin UnitOfWork: buscar usuario por email directamente con Identity
                 var user = await _userManager.FindByEmailAsync(loginDto.Email);
 
                 if (user == null)
@@ -149,17 +172,13 @@ namespace ByG_Backend.src.Controller
                 TimeZoneInfo chileZone = TimeZoneInfo.FindSystemTimeZoneById("Chile/Continental");
                 user.LastAccess = TimeZoneInfo.ConvertTimeFromUtc(DateTime.UtcNow, chileZone);
                 
-
                 var updateResult = await _userManager.UpdateAsync(user);
 
                 var roles = await _userManager.GetRolesAsync(user);
                 var token = _tokenService.GenerateToken(user, roles.ToList());
 
-                // Tomamos el primer rol (Identity devuelve lista, pero tu sistema parece usar uno solo)
-                // Si no tiene rol en Identity, usamos "User" por defecto o la propiedad user.Role
                 var currentRole = roles.FirstOrDefault() ?? user.Role ?? "User";
 
-                // Pasamos el rol al mapper
                 var userDto = UserMapper.UserToAuthenticatedDto(user, token, currentRole);
 
                 return Ok(new ApiResponse<AuthenticatedUserDto>(true, "Login exitoso", userDto));

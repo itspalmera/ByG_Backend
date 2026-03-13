@@ -6,7 +6,6 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
-
 using ByG_Backend.src.Data;
 using ByG_Backend.src.DTOs;
 using ByG_Backend.src.Helpers;
@@ -15,10 +14,15 @@ using ByG_Backend.src.Models;
 using ByG_Backend.src.Services;
 using ByG_Backend.src.Options;
 using ByG_Backend.src.RequestHelpers;
-using QuestPDF.Fluent; // Indispensable para la paginación
+using QuestPDF.Fluent;
 
 namespace ByG_Backend.src.Controller
 {
+    /// <summary>
+    /// Controlador encargado de gestionar las Cotizaciones (Quotes).
+    /// Permite el registro, actualización, filtrado y la generación automática de documentos PDF
+    /// al momento de la aprobación de una cotización.
+    /// </summary>
     [ApiController]
     [Route("api/[controller]")]
     public class QuoteController(DataContext context, IOptions<CompanyInfoOptions> companyOptions) : ControllerBase
@@ -26,9 +30,20 @@ namespace ByG_Backend.src.Controller
         private readonly DataContext _context = context;
         private readonly CompanyInfoOptions _company = companyOptions.Value;
 
-        // ============================================================
-        // GET ALL (Filtros + Paginación Genérica)
-        // ============================================================
+        /// <summary>
+        /// Obtiene un listado paginado de cotizaciones con filtros avanzados.
+        /// </summary>
+        /// <remarks>
+        /// Soporta filtros por estado, término de búsqueda (Número, Proveedor, Observaciones) 
+        /// y asociación a una solicitud de compra específica.
+        /// </remarks>
+        /// <param name="status">Estado de la cotización (ej. Pendiente, Aprobada).</param>
+        /// <param name="searchTerm">Texto para buscar en número, nombre del proveedor u observaciones.</param>
+        /// <param name="purchaseId">ID de la compra relacionada.</param>
+        /// <param name="orderBy">Campo por el cual ordenar los resultados.</param>
+        /// <param name="pageNumber">Número de página (mínimo 1).</param>
+        /// <param name="pageSize">Cantidad de registros por página (máximo 100).</param>
+        /// <returns>Respuesta paginada con objetos de tipo QuoteDto.</returns>
         [HttpGet]
         public async Task<ActionResult<ApiResponse<PagedResponse<QuoteDto>>>> GetAll(
             [FromQuery] string? status,
@@ -41,34 +56,27 @@ namespace ByG_Backend.src.Controller
         {
             try
             {
-                // 1. Configuración de Paginación
                 if (pageNumber < 1) pageNumber = 1;
                 if (pageSize < 1) pageSize = 10;
                 if (pageSize > 100) pageSize = 100;
 
-                // 2. Consulta Base (Incluyendo Relaciones)
                 var query = _context.Quotes.AsNoTracking()
                     .Include(q => q.QuoteItems)
                     .Include(q => q.Supplier)
                     .Include(q => q.Purchase)
                     .AsQueryable();
 
-                // 3. FILTROS (Lógica de Negocio)
-
-                // A. Filtro por Compra
                 if (purchaseId.HasValue)
                 {
                     query = query.Where(q => q.PurchaseId == purchaseId.Value);
                 }
 
-                // B. Filtro por Estado
                 if (!string.IsNullOrWhiteSpace(status))
                 {
                     var cleanStatus = status.Trim().ToLower();
                     query = query.Where(q => q.Status.ToLower() == cleanStatus);
                 }
 
-                // C. Búsqueda Global (Manual para incluir Proveedor)
                 if (!string.IsNullOrWhiteSpace(searchTerm))
                 {
                     var term = searchTerm.Trim().ToLower();
@@ -79,9 +87,6 @@ namespace ByG_Backend.src.Controller
                     );
                 }
 
-
-                // 4. Ordenamiento
-                // Por defecto ordenamos por fecha descendente (lo más nuevo arriba)
                 if (string.IsNullOrWhiteSpace(orderBy))
                 {
                     query = query.OrderByDescending(q => q.Date);
@@ -91,13 +96,9 @@ namespace ByG_Backend.src.Controller
                     query = query.ApplySorting(orderBy, "Date");
                 }
 
-                // 5. Paginación y Ejecución
                 var pagedResult = await query.ToPagedResponseAsync(pageNumber, pageSize);
-
-                // 6. Mapeo a DTOs
                 var dtos = pagedResult.Items.Select(QuoteMapper.QuoteToQuoteDto).ToList();
 
-                // 7. Respuesta
                 var finalResponse = new PagedResponse<QuoteDto>(
                     dtos, 
                     pagedResult.TotalItems, 
@@ -113,9 +114,11 @@ namespace ByG_Backend.src.Controller
             }
         }
 
-        // ============================================================
-        // GET BY ID
-        // ============================================================
+        /// <summary>
+        /// Obtiene el detalle de una cotización específica por su ID.
+        /// </summary>
+        /// <param name="id">Identificador único de la cotización.</param>
+        /// <returns>Modelo de la cotización con sus ítems y proveedor incluidos.</returns>
         [HttpGet("{id:int}")]
         public async Task<ActionResult<ApiResponse<Quote>>> GetById(int id)
         {
@@ -131,9 +134,15 @@ namespace ByG_Backend.src.Controller
             return Ok(new ApiResponse<Quote>(true, "Cotización encontrada", quote));
         }
 
-        // ============================================================
-        // TOGGLE STATUS & PDF GENERATION
-        // ============================================================
+        /// <summary>
+        /// Cambia el estado de una cotización y genera un archivo PDF si el estado es "Aprobada".
+        /// </summary>
+        /// <remarks>
+        /// Si la cotización se marca como "Aprobada", se utiliza <see cref="QuoteServices"/> para generar 
+        /// un documento PDF que se guarda físicamente en el servidor (wwwroot/Registros/Aprobadas).
+        /// </remarks>
+        /// <param name="dto">DTO con el ID de la cotización y el nuevo estado.</param>
+        /// <returns>Mensaje de confirmación del cambio de estado.</returns>
         [HttpPatch("status")]
         public async Task<ActionResult<ApiResponse<string>>> ToggleStatus([FromBody] QuoteToggleStatusDto dto)
         {
@@ -146,7 +155,6 @@ namespace ByG_Backend.src.Controller
 
             var normalized = dto.newStatus.Trim();
             
-            // Lógica de PDF al aprobar
             if (normalized.Equals("Aprobada", StringComparison.OrdinalIgnoreCase) && quote.Status != "Aprobada")
             {
                 try
@@ -172,9 +180,13 @@ namespace ByG_Backend.src.Controller
             return Ok(new ApiResponse<string>(true, $"Estado actualizado a {normalized}"));
         }
 
-        // ============================================================
-        // UPDATE & CREATE
-        // ============================================================
+        /// <summary>
+        /// Actualiza los datos de una cotización existente.
+        /// </summary>
+        /// <remarks>
+        /// Solo permite actualizaciones si la cotización no está en estado final (Aprobada o Rechazada).
+        /// </remarks>
+        /// <param name="dto">DTO con la información actualizada de la cotización.</param>
         [HttpPut("update")]
         public async Task<ActionResult<ApiResponse<QuoteDto>>> UpdateQuote([FromBody] UpdateQuoteDto dto)
         {
@@ -190,6 +202,11 @@ namespace ByG_Backend.src.Controller
             return Ok(new ApiResponse<QuoteDto>(true, "Actualizada", QuoteMapper.QuoteToQuoteDto(quote)));
         }
 
+        /// <summary>
+        /// Registra una nueva cotización en el sistema.
+        /// </summary>
+        /// <param name="dto">Datos de la nueva cotización.</param>
+        /// <returns>La cotización creada mapeada a DTO.</returns>
         [HttpPost("create")]
         public async Task<ActionResult<ApiResponse<QuoteDto>>> CreateQuote([FromBody] CreateQuoteDto dto)
         {
