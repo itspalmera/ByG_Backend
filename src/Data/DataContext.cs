@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 using ByG_Backend.src.Models;
+using ByG_Backend.src.Models.MaterialRequest;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Identity.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore;
@@ -67,14 +68,13 @@ namespace ByG_Backend.src.Data
         /// </summary>
         public DbSet<User> User { get; set; } = null!;
 
-        /// <summary>
-        /// Configura el modelo de datos mediante Fluent API.
-        /// </summary>
-        /// <remarks>
-        /// Llama a base.OnModelCreating para asegurar que las tablas de Identity 
-        /// (AspNetUsers, AspNetRoles, etc.) se creen correctamente.
-        /// </remarks>
-        /// <param name="builder">Constructor de modelos de Entity Framework.</param>
+        // Tablas externas (Lectura compartida)
+        public DbSet<Solicitud> Solicitudes { get; set; } = null!;
+        public DbSet<DetalleSolicitud> DetalleSolicitudes { get; set; } = null!;
+        public DbSet<Producto> Productos { get; set; } = null!;
+        public DbSet<Bodega> Bodegas { get; set; } = null!;
+
+        //Carga identity
         protected override void OnModelCreating(ModelBuilder builder)
         {
             base.OnModelCreating(builder);

@@ -37,5 +37,7 @@ namespace ByG_Backend.src.Interfaces
         /// <param name="fileName">Nombre del archivo con su extensión (ej: Solicitud.pdf).</param>
         /// <returns>Tarea que representa la operación asíncrona.</returns>
         Task SendPdfDocumentAsync(string email, byte[] pdfBytes, string fileName);
+
+        Task SendPdfPurchaseOrderAsync(string email, byte[] pdfBytes, string fileName);
     }
 }

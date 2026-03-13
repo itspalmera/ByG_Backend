@@ -104,4 +104,25 @@ public class EmailService : IEmailService
 
         await _resend.EmailSendAsync(message);
     }
+
+        public async Task SendPdfPurchaseOrderAsync(string email, byte[] pdfBytes, string fileName)
+    {
+        var message = new EmailMessage
+        {
+            From = _config["EmailConfiguracion:from"] ?? "onboarding@resend.dev",
+            To = email,
+            Subject = "Orden de Compra N° {purchaseOrderNumber} - ByG Ingenieria",
+            HtmlBody = "<p>Se envía el documento de la orden de compra número {purchaseOrderNumber}.</p>",
+            Attachments = new List<EmailAttachment>
+            {
+                new EmailAttachment
+                {
+                    Filename = fileName,
+                    Content = pdfBytes
+                }
+            }
+        };
+
+        await _resend.EmailSendAsync(message);
+    }
 }

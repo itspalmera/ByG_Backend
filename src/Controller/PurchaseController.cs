@@ -157,6 +157,79 @@ namespace ByG_Backend.src.Controller
             }
         }
 
+
+        // ============================================================
+        // CREAR COMPRA AUTOMÁTICA DESDE SISTEMA DE SOLICITUDES
+        // ============================================================
+        [HttpPost("from-solicitud/{solicitudId}")]
+        public async Task<ActionResult<ApiResponse<PurchaseDetailDto>>> CreateFromSolicitud(int solicitudId)
+        {
+            using var transaction = await context.Database.BeginTransactionAsync();
+            try
+            {
+                // 1. Buscar la solicitud original y sus productos en la BD compartida
+                var solicitud = await context.Solicitudes
+                    .Include(s => s.Detalles)
+                        .ThenInclude(d => d.Producto) // Incluye info del inventario si existe
+                    .FirstOrDefaultAsync(s => s.Id == solicitudId);
+
+                if (solicitud == null)
+                    return NotFound(new ApiResponse<string>(false, "La Solicitud indicada no existe."));
+
+                // Validar que no se haya importado antes
+                string folioCompra = $"REQ-{solicitud.Folio:D4}";
+                if (await context.Purchase.AnyAsync(p => p.PurchaseNumber == folioCompra))
+                    return Conflict(new ApiResponse<string>(false, "Esta solicitud ya fue convertida a Compra anteriormente."));
+
+                // 2. Mapear de Solicitud (Externa) a Purchase (Tuya)
+                var newPurchase = new Purchase
+                {
+                    PurchaseNumber = folioCompra,
+                    ProjectName = string.IsNullOrWhiteSpace(solicitud.Proyecto) ? "Proyecto General" : solicitud.Proyecto,
+                    Status = "Esperando proveedores", // Estado inicial según tu documento
+                    RequestDate = solicitud.FechaCreacion,
+                    UpdatedAt = DateTime.UtcNow,
+                    Requester = solicitud.UsuarioSolicitanteId ?? "Sistema", 
+                    Observations = solicitud.Observaciones,
+                    
+                    // 3. Mapear Detalles a PurchaseItems
+                    PurchaseItems = solicitud.Detalles.Select(d => new PurchaseItem
+                    {
+                        // Si viene del inventario usa el nombre oficial, si fue escrito a mano usa el temporal
+                        Name = d.Producto != null ? d.Producto.NombreProducto : (d.TemporalNombre ?? "Producto sin nombre"),
+                        Description = d.Observacion,
+                        Unit = d.Producto != null ? (d.Producto.Formato ?? "UN") : (d.TemporalUnidad ?? "UN"),
+                        Size = d.Producto != null ? d.Producto.TallaMedida : d.TemporalTalla,
+                        Quantity = d.CantidadAprobada > 0 ? d.CantidadAprobada : d.CantidadSolicitada
+                    }).ToList()
+                };
+
+                context.Purchase.Add(newPurchase);
+                await context.SaveChangesAsync(); // Guardamos para generar el ID de Purchase
+
+                // 4. Crear automáticamente la Solicitud de Cotización vacía
+                var requestQuote = new RequestQuote
+                {
+                    PurchaseId = newPurchase.Id,
+                    Number = newPurchase.PurchaseNumber.Replace("REQ", "RFQ"),
+                    Status = "Pendiente",
+                    CreatedAt = DateTime.UtcNow
+                };
+                context.RequestQuotes.Add(requestQuote);
+
+                await context.SaveChangesAsync();
+                await transaction.CommitAsync();
+
+                return Ok(new ApiResponse<string>(true, $"Compra {folioCompra} generada exitosamente desde la Solicitud."));
+            }
+            catch (Exception ex)
+            {
+                await transaction.RollbackAsync();
+                return StatusCode(500, new ApiResponse<string>(false, "Error al generar compra: " + ex.Message));
+            }
+        }
+
+
         /// <summary>
         /// Actualiza la información general de una compra y sus ítems.
         /// </summary>

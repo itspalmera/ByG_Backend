@@ -14,6 +14,7 @@ using ByG_Backend.src.Services;
 using QuestPDF.Fluent;
 using ByG_Backend.src.Options;
 using Microsoft.Extensions.Options;
+using ByG_Backend.src.Interfaces;
 
 namespace ByG_Backend.src.Controller
 {
@@ -22,10 +23,12 @@ namespace ByG_Backend.src.Controller
     /// </summary>
     [ApiController]
     [Route("api/[controller]")]
-    public class PurchaseOrderController(DataContext context, IOptions<CompanyInfoOptions> companyOptions) : ControllerBase
+    public class PurchaseOrderController(DataContext context, IOptions<CompanyInfoOptions> companyOptions, IEmailService emailService, ILogger<PurchaseOrderController> logger) : ControllerBase
     {
 
         private readonly CompanyInfoOptions _company = companyOptions.Value;
+        private readonly IEmailService _emailService = emailService;
+        private readonly ILogger<PurchaseOrderController> _logger = logger;
         
         /// <summary>
         /// Obtiene un listado paginado de todas las órdenes de compra.
@@ -194,5 +197,50 @@ namespace ByG_Backend.src.Controller
 
             return File(pdf, "application/pdf", $"OC_{order.OrderNumber}.pdf");
         }
+
+        [HttpPost("{id}/send")]
+        public async Task<IActionResult> SendPurchaseOrder(int id)
+        {
+            try
+            {
+                var order = await context.PurchaseOrder
+                    .Include(o => o.Quote)
+                        .ThenInclude(q => q.Supplier)
+                    .Include(o => o.Quote)
+                        .ThenInclude(q => q.QuoteItems)
+                    .FirstOrDefaultAsync(o => o.Id == id);
+
+                if (order == null)
+                    return NotFound("Orden de compra no encontrada.");
+
+                var supplierEmail = order.Quote?.Supplier?.Email;
+
+                if (string.IsNullOrWhiteSpace(supplierEmail))
+                    return BadRequest("El proveedor no tiene correo registrado.");
+
+                // Generar PDF
+                var document = new PurchaseOrderServices(order, _company);
+                byte[] pdfBytes = document.GeneratePdf();
+
+                string nombreArchivo = $"OC_{order.OrderNumber}.pdf";
+
+                await _emailService.SendPdfPurchaseOrderAsync(
+                    supplierEmail,
+                    pdfBytes,
+                    nombreArchivo
+                );
+
+                return Ok(new
+                {
+                    Message = $"Orden enviada correctamente a {supplierEmail}"
+                });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error enviando Orden de Compra");
+                return StatusCode(500, $"Error enviando OC: {ex.Message}");
+            }
+        }
+
     }
 }
