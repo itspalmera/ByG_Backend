@@ -2,6 +2,19 @@ using System.ComponentModel.DataAnnotations;
 
 namespace ByG_Backend.src.DTOs
 {
+    /// <summary>
+    /// Objeto de transferencia de datos para la actualización de proveedores existentes.
+    /// Incluye todas las validaciones de integridad y permite modificar el estado operativo (IsActive).
+    /// </summary>
+    /// <param name="Rut">Rol Único Tributario corregido o mantenido.</param>
+    /// <param name="BusinessName">Razón Social actualizada de la empresa.</param>
+    /// <param name="ContactName">Nombre del contacto actualizado.</param>
+    /// <param name="Email">Correo electrónico institucional para notificaciones.</param>
+    /// <param name="Phone">Número telefónico de contacto.</param>
+    /// <param name="Address">Dirección física actualizada.</param>
+    /// <param name="City">Ciudad de operación.</param>
+    /// <param name="ProductCategories">Rubros o categorías de productos suministrados.</param>
+    /// <param name="IsActive">Define si el proveedor está habilitado para participar en nuevas licitaciones.</param>
     public record SupplierUpdateDto(
         [Required(ErrorMessage = "El RUT es obligatorio.")]
         [StringLength(12, MinimumLength = 8, ErrorMessage = "El RUT debe tener entre 8 y 12 caracteres.")]
