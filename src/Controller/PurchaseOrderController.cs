@@ -158,10 +158,14 @@ namespace ByG_Backend.src.Controller
         }
 
         /// <summary>
-        /// Obtiene el detalle de una Orden de Compra por su ID.
+        /// Recupera la información detallada de una Orden de Compra específica.
         /// </summary>
-        /// <param name="id">ID único de la Orden de Compra.</param>
-        /// <returns>Detalle completo incluyendo ítems y proveedor.</returns>
+        /// <remarks>
+        /// Realiza un Eager Loading profundo para obtener la solicitud origen, el proveedor 
+        /// y el desglose de productos cotizados en una sola consulta optimizada.
+        /// </remarks>
+        /// <param name="id">ID primario de la OC.</param>
+        /// <returns>DTO con toda la información necesaria para la vista de detalle o impresión.</returns>
         [HttpGet("{id}")]
         public async Task<ActionResult<ApiResponse<PurchaseOrderDetailDto>>> GetPurchaseOrderById(int id)
         {
@@ -172,42 +176,51 @@ namespace ByG_Backend.src.Controller
                 .Include(po => po.Quote).ThenInclude(q => q.QuoteItems)
                 .FirstOrDefaultAsync(po => po.Id == id);
 
-            if (purchaseOrder == null) return NotFound(new ApiResponse<string>(false, "No encontrada."));
+            if (purchaseOrder == null) 
+                return NotFound(new ApiResponse<string>(false, "Orden de compra no encontrada."));
 
-            return Ok(new ApiResponse<PurchaseOrderDetailDto>(true, "OC obtenida.", purchaseOrder.ToDetailDto()));
+            return Ok(new ApiResponse<PurchaseOrderDetailDto>(true, "OC obtenida exitosamente.", purchaseOrder.ToDetailDto()));
         }
 
-
+        /// <summary>
+        /// Genera un documento PDF dinámico de la Orden de Compra para visualización en navegador.
+        /// </summary>
+        /// <param name="id">ID de la orden a exportar.</param>
+        /// <returns>Stream de datos con el tipo de contenido application/pdf.</returns>
         [HttpGet("{id}/pdf")]
         public async Task<IActionResult> GeneratePurchaseOrderPdf(int id)
         {
             var order = await context.PurchaseOrder
-                .Include(o => o.Quote)
-                    .ThenInclude(q => q.QuoteItems)
-                .Include(o => o.Quote)
-                    .ThenInclude(q => q.Supplier)
+                .Include(o => o.Quote).ThenInclude(q => q.QuoteItems)
+                .Include(o => o.Quote).ThenInclude(q => q.Supplier)
                 .FirstOrDefaultAsync(o => o.Id == id);
 
             if (order == null)
                 return NotFound();
 
+            // Lógica delegada al servicio de reporte con los datos de la compañía (Options Pattern)
             var document = new PurchaseOrderServices(order, _company);
-
             var pdf = document.GeneratePdf();
 
             return File(pdf, "application/pdf", $"OC_{order.OrderNumber}.pdf");
         }
 
+        /// <summary>
+        /// Procesa y envía la Orden de Compra por correo electrónico al proveedor.
+        /// </summary>
+        /// <remarks>
+        /// Este método automatiza la exportación a PDF y utiliza el servicio de mensajería inyectado
+        /// para notificar formalmente al proveedor seleccionado.
+        /// </remarks>
+        /// <param name="id">ID de la orden a despachar.</param>
         [HttpPost("{id}/send")]
         public async Task<IActionResult> SendPurchaseOrder(int id)
         {
             try
             {
                 var order = await context.PurchaseOrder
-                    .Include(o => o.Quote)
-                        .ThenInclude(q => q.Supplier)
-                    .Include(o => o.Quote)
-                        .ThenInclude(q => q.QuoteItems)
+                    .Include(o => o.Quote).ThenInclude(q => q.Supplier)
+                    .Include(o => o.Quote).ThenInclude(q => q.QuoteItems)
                     .FirstOrDefaultAsync(o => o.Id == id);
 
                 if (order == null)
@@ -216,14 +229,15 @@ namespace ByG_Backend.src.Controller
                 var supplierEmail = order.Quote?.Supplier?.Email;
 
                 if (string.IsNullOrWhiteSpace(supplierEmail))
-                    return BadRequest("El proveedor no tiene correo registrado.");
+                    return BadRequest("El proveedor asociado no posee un correo electrónico registrado.");
 
-                // Generar PDF
+                // Generación de documento en memoria para adjunto
                 var document = new PurchaseOrderServices(order, _company);
                 byte[] pdfBytes = document.GeneratePdf();
 
                 string nombreArchivo = $"OC_{order.OrderNumber}.pdf";
 
+                // Despacho asíncrono vía IEmailService
                 await _emailService.SendPdfPurchaseOrderAsync(
                     supplierEmail,
                     pdfBytes,
@@ -237,10 +251,9 @@ namespace ByG_Backend.src.Controller
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Error enviando Orden de Compra");
+                _logger.LogError(ex, "Error crítico durante el envío de la OC {OrderId}", id);
                 return StatusCode(500, $"Error enviando OC: {ex.Message}");
             }
         }
-
     }
 }

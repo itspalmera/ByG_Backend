@@ -161,42 +161,49 @@ namespace ByG_Backend.src.Controller
         // ============================================================
         // CREAR COMPRA AUTOMÁTICA DESDE SISTEMA DE SOLICITUDES
         // ============================================================
+        /// <summary>
+        /// Genera automáticamente un requerimiento de compra a partir de una solicitud externa aprobada.
+        /// </summary>
+        /// <remarks>
+        /// Este endpoint realiza un mapeo complejo:
+        /// 1. Extrae datos de la tabla 'Solicitudes' (sistema externo).
+        /// 2. Valida la existencia previa para evitar duplicados mediante el folio formateado (REQ-XXXX).
+        /// 3. Transforma los detalles de bodega en ítems de compra con especificaciones técnicas.
+        /// 4. Inicia automáticamente el flujo de licitación creando una RFQ (Request for Quotation).
+        /// </remarks>
+        /// <param name="solicitudId">Identificador único de la solicitud en el sistema de origen.</param>
+        /// <returns>Mensaje de éxito con el folio generado o error detallado en caso de fallo transaccional.</returns>
         [HttpPost("from-solicitud/{solicitudId}")]
         public async Task<ActionResult<ApiResponse<PurchaseDetailDto>>> CreateFromSolicitud(int solicitudId)
         {
             using var transaction = await context.Database.BeginTransactionAsync();
             try
             {
-                // 1. Buscar la solicitud original y sus productos en la BD compartida
                 var solicitud = await context.Solicitudes
                     .Include(s => s.Detalles)
-                        .ThenInclude(d => d.Producto) // Incluye info del inventario si existe
+                        .ThenInclude(d => d.Producto) 
                     .FirstOrDefaultAsync(s => s.Id == solicitudId);
 
                 if (solicitud == null)
-                    return NotFound(new ApiResponse<string>(false, "La Solicitud indicada no existe."));
+                    return NotFound(new ApiResponse<string>(false, "La Solicitud indicada no existe en el sistema externo."));
 
-                // Validar que no se haya importado antes
                 string folioCompra = $"REQ-{solicitud.Folio:D4}";
-                if (await context.Purchase.AnyAsync(p => p.PurchaseNumber == folioCompra))
-                    return Conflict(new ApiResponse<string>(false, "Esta solicitud ya fue convertida a Compra anteriormente."));
+                if (await context.Purchase.AsNoTracking().AnyAsync(p => p.PurchaseNumber == folioCompra))
+                    return Conflict(new ApiResponse<string>(false, $"La solicitud {folioCompra} ya ha sido importada anteriormente."));
 
-                // 2. Mapear de Solicitud (Externa) a Purchase (Tuya)
                 var newPurchase = new Purchase
                 {
                     PurchaseNumber = folioCompra,
                     ProjectName = string.IsNullOrWhiteSpace(solicitud.Proyecto) ? "Proyecto General" : solicitud.Proyecto,
-                    Status = "Esperando proveedores", // Estado inicial según tu documento
+                    Status = "Esperando proveedores", 
                     RequestDate = solicitud.FechaCreacion,
                     UpdatedAt = DateTime.UtcNow,
-                    Requester = solicitud.UsuarioSolicitanteId ?? "Sistema", 
+                    Requester = solicitud.UsuarioSolicitanteId ?? "Sistema Automático", 
                     Observations = solicitud.Observaciones,
                     
-                    // 3. Mapear Detalles a PurchaseItems
                     PurchaseItems = solicitud.Detalles.Select(d => new PurchaseItem
                     {
-                        // Si viene del inventario usa el nombre oficial, si fue escrito a mano usa el temporal
-                        Name = d.Producto != null ? d.Producto.NombreProducto : (d.TemporalNombre ?? "Producto sin nombre"),
+                        Name = d.Producto != null ? d.Producto.NombreProducto : (d.TemporalNombre ?? "Producto sin especificar"),
                         Description = d.Observacion,
                         Unit = d.Producto != null ? (d.Producto.Formato ?? "UN") : (d.TemporalUnidad ?? "UN"),
                         Size = d.Producto != null ? d.Producto.TallaMedida : d.TemporalTalla,
@@ -205,9 +212,8 @@ namespace ByG_Backend.src.Controller
                 };
 
                 context.Purchase.Add(newPurchase);
-                await context.SaveChangesAsync(); // Guardamos para generar el ID de Purchase
+                await context.SaveChangesAsync(); 
 
-                // 4. Crear automáticamente la Solicitud de Cotización vacía
                 var requestQuote = new RequestQuote
                 {
                     PurchaseId = newPurchase.Id,
@@ -218,6 +224,7 @@ namespace ByG_Backend.src.Controller
                 context.RequestQuotes.Add(requestQuote);
 
                 await context.SaveChangesAsync();
+                
                 await transaction.CommitAsync();
 
                 return Ok(new ApiResponse<string>(true, $"Compra {folioCompra} generada exitosamente desde la Solicitud."));
@@ -225,10 +232,9 @@ namespace ByG_Backend.src.Controller
             catch (Exception ex)
             {
                 await transaction.RollbackAsync();
-                return StatusCode(500, new ApiResponse<string>(false, "Error al generar compra: " + ex.Message));
+                return StatusCode(500, new ApiResponse<string>(false, "Error crítico al generar compra: " + ex.Message));
             }
         }
-
 
         /// <summary>
         /// Actualiza la información general de una compra y sus ítems.
