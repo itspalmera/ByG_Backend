@@ -3,23 +3,26 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Security.Claims;
 using System.Threading.Tasks;
-
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
-
 using ByG_Backend.src.Data;
 using ByG_Backend.src.DTOs;
 using ByG_Backend.src.Helpers;
 using ByG_Backend.src.Mappers;
 using ByG_Backend.src.Models;
 using ByG_Backend.src.Interfaces;
-using ByG_Backend.src.RequestHelpers; // Para PagedResponse y Extensiones
+using ByG_Backend.src.RequestHelpers;
 using ByG_Backend.src.DTO;
 
 namespace ByG_Backend.src.Controller
 {
+    /// <summary>
+    /// Controlador para la gestión de usuarios y perfiles.
+    /// Proporciona funcionalidades administrativas (listado, cambio de roles, estado) 
+    /// y de usuario (actualización de perfil, recuperación de contraseña).
+    /// </summary>
     [ApiController]
     [Route("api/[controller]")]
     public class UserController(
@@ -35,9 +38,18 @@ namespace ByG_Backend.src.Controller
         private readonly IEmailService _emailService = emailService;
         private readonly IUserRepository _repository = repository;
 
-        // ============================================================
-        // GET ALL (Admin) - USANDO EXTENSIÓN GENÉRICA
-        // ============================================================
+        /// <summary>
+        /// Obtiene un listado paginado de todos los usuarios registrados (Solo Administradores).
+        /// </summary>
+        /// <param name="isActive">Filtro opcional por estado de cuenta.</param>
+        /// <param name="role">Filtro opcional por rol asignado.</param>
+        /// <param name="searchTerm">Término de búsqueda global (Email, UserName, Nombres).</param>
+        /// <param name="registeredFrom">Filtro de fecha desde (registro).</param>
+        /// <param name="registeredTo">Filtro de fecha hasta (registro).</param>
+        /// <param name="orderBy">Parámetro de ordenamiento dinámico.</param>
+        /// <param name="pageNumber">Número de página.</param>
+        /// <param name="pageSize">Registros por página.</param>
+        /// <returns>Respuesta paginada con DTOs de usuario.</returns>
         [Authorize(Roles = "Admin")]
         [HttpGet]
         public async Task<ActionResult<ApiResponse<PagedResponse<UserDto>>>> GetAll(
@@ -55,7 +67,6 @@ namespace ByG_Backend.src.Controller
             {
                 var query = _context.Users.AsNoTracking().AsQueryable();
 
-                // 1. Filtros de Negocio
                 if (isActive.HasValue)
                     query = query.Where(u => u.IsActive == isActive.Value);
 
@@ -68,19 +79,13 @@ namespace ByG_Backend.src.Controller
                 if (registeredTo.HasValue)
                     query = query.Where(u => u.Registered <= registeredTo.Value);
 
-                // Solo pasas el término y los nombres de las columnas donde quieres buscar
                 query = query.ApplySearch(searchTerm, "Email", "UserName", "FirstName", "LastName");
 
-                // 2. Lógica de Ordenamiento
                 query = query.ApplySorting(orderBy, "Registered");
 
-                // 3. APLICACIÓN DE LA EXTENSIÓN GENÉRICA (DRY)
                 var pagedResult = await query.ToPagedResponseAsync(pageNumber, pageSize);
 
-                // 4. Mapeo de los ítems resultantes a DTO
                 var dtos = pagedResult.Items.Select(UserMapper.UserToUserDto).ToList();
-
-                // 5. Re-envolver en un PagedResponse de DTOs para el Frontend
                 var finalPagedData = new PagedResponse<UserDto>(
                     dtos, 
                     pagedResult.TotalItems, 
@@ -100,9 +105,10 @@ namespace ByG_Backend.src.Controller
             }
         }
 
-        // ============================================================
-        // SEARCH (Admin) - Búsqueda por coincidencia exacta
-        // ============================================================
+        /// <summary>
+        /// Busca un usuario específico por su Email o Nombre de Usuario (Solo Administradores).
+        /// </summary>
+        /// <param name="search">DTO que contiene el criterio de búsqueda.</param>
         [Authorize(Roles = "Admin")]
         [HttpGet("search")]
         public async Task<ActionResult<ApiResponse<UserDto>>> GetBySearch([FromQuery] UserSearchDto search)
@@ -121,9 +127,13 @@ namespace ByG_Backend.src.Controller
             return Ok(new ApiResponse<UserDto>(true, "Usuario encontrado", UserMapper.UserToUserDto(user)));
         }
 
-        // ============================================================
-        // TOGGLE STATUS (Admin)
-        // ============================================================
+        /// <summary>
+        /// Habilita o deshabilita la cuenta de un usuario (Solo Administradores).
+        /// </summary>
+        /// <remarks>
+        /// Por seguridad, el sistema impide la deshabilitación de usuarios con rol de Administrador.
+        /// </remarks>
+        /// <param name="dto">DTO con el email del usuario a modificar.</param>
         [Authorize(Roles = "Admin")]
         [HttpPatch("status")]
         public async Task<ActionResult<ApiResponse<string>>> ToggleStatus([FromBody] ToggleStatusDto dto)
@@ -143,9 +153,10 @@ namespace ByG_Backend.src.Controller
             return Ok(new ApiResponse<string>(true, user.IsActive ? "Usuario habilitado" : "Usuario deshabilitado"));
         }
 
-        // ============================================================
-        // UPDATE PROFILE (User)
-        // ============================================================
+        /// <summary>
+        /// Permite al usuario autenticado actualizar sus propios datos de perfil.
+        /// </summary>
+        /// <param name="dto">DTO con los nuevos datos de perfil.</param>
         [Authorize(Roles = "User")]
         [HttpPut("profile")]
         public async Task<ActionResult<ApiResponse<UserDto>>> UpdateProfile([FromBody] UpdateProfileDto dto)
@@ -164,9 +175,13 @@ namespace ByG_Backend.src.Controller
             return Ok(new ApiResponse<UserDto>(true, "Perfil actualizado", UserMapper.UserToUserDto(user)));
         }
 
-        // ============================================================
-        // PASSWORD RECOVERY (Change & Reset)
-        // ============================================================
+        /// <summary>
+        /// Inicia el proceso de recuperación de contraseña enviando un código de 6 dígitos al correo.
+        /// </summary>
+        /// <remarks>
+        /// El código generado tiene una validez de 3 minutos.
+        /// </remarks>
+        /// <param name="dto">DTO con el email registrado.</param>
         [HttpPost("ChangePassword")]
         public async Task<IActionResult> ForgotPassword([FromBody] ForgotPasswordDto dto)
         {
@@ -188,6 +203,10 @@ namespace ByG_Backend.src.Controller
             return Ok("Código enviado con éxito.");
         }
 
+        /// <summary>
+        /// Restablece la contraseña utilizando el código de verificación enviado por correo.
+        /// </summary>
+        /// <param name="dto">DTO con el email, el código de verificación y la nueva contraseña.</param>
         [HttpPost("ResetPassword")]
         public async Task<IActionResult> ResetPassword([FromBody] ResetPasswordDto dto)
         {
@@ -213,9 +232,10 @@ namespace ByG_Backend.src.Controller
             return Ok("Contraseña actualizada con éxito.");
         }
 
-        // ============================================================
-        // CHANGE ROLE (Admin)
-        // ============================================================
+        /// <summary>
+        /// Cambia el rol de un usuario en el sistema (Solo Administradores).
+        /// </summary>
+        /// <param name="dto">DTO con el email y el nuevo rol solicitado.</param>
         [Authorize(Roles = "Admin")]
         [HttpPatch("changeRole")]
         public async Task<IActionResult> ChangeRole([FromBody] ChangeRoleDto dto)
