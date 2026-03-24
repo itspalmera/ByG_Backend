@@ -105,6 +105,7 @@ namespace ByG_Backend.src.Controller
         {
             var requestQuote = await _context.RequestQuotes
                 .Include(q => q.RequestQuoteSuppliers)
+                    .ThenInclude(rqs => rqs.Supplier)
                 .AsNoTracking()
                 .FirstOrDefaultAsync(q => q.Id == id);
 
@@ -183,5 +184,73 @@ namespace ByG_Backend.src.Controller
                 return StatusCode(500, $"Error en el proceso de envío: {ex.Message}");
             }
         }
+    
+
+        /// <summary>
+        /// Envía la solicitud de cotización (PDF) por correo a un proveedor específico.
+        /// </summary>
+        /// <param name="requestQuoteId">ID de la solicitud (RFQ).</param>
+        /// <param name="supplierId">ID del proveedor destinatario.</param>
+        /// <returns>Resultado de la operación.</returns>
+        [HttpPost("{requestQuoteId}/send-to-supplier/{supplierId}")]
+        public async Task<IActionResult> SendQuoteToSupplier(int requestQuoteId, int supplierId)
+        {
+            try
+            {
+                // 1. Obtener la solicitud, la compra y el proveedor
+                var requestQuote = await _context.RequestQuotes
+                    .Include(rq => rq.Purchase)
+                        .ThenInclude(p => p.PurchaseItems) // Necesario para el PDF
+                    .Include(rq => rq.RequestQuoteSuppliers)
+                        .ThenInclude(rqs => rqs.Supplier)
+                    .FirstOrDefaultAsync(rq => rq.Id == requestQuoteId);
+
+                if (requestQuote == null || requestQuote.Purchase == null)
+                    return NotFound(new ApiResponse<string>(false, "Solicitud o Compra no encontrada."));
+
+                var supplierRelation = requestQuote.RequestQuoteSuppliers.FirstOrDefault(rqs => rqs.SupplierId == supplierId);
+                
+                if (supplierRelation == null || supplierRelation.Supplier == null)
+                    return NotFound(new ApiResponse<string>(false, "El proveedor no está vinculado a esta solicitud."));
+
+                var supplierEmail = supplierRelation.Supplier.Email;
+
+                if (string.IsNullOrWhiteSpace(supplierEmail))
+                    return BadRequest(new ApiResponse<string>(false, "El proveedor no tiene un correo electrónico registrado."));
+
+                // 2. Generar el PDF
+                var documento = new QuoteServices(requestQuote.Purchase, requestQuote, _company);
+                byte[] pdfBytes = documento.GeneratePdf();
+                string nombreArchivo = $"Solicitud_Cotizacion_{requestQuote.Number}.pdf";
+
+                // 3. Enviar el correo usando IEmailService
+                await _emailService.SendPdfDocumentAsync(supplierEmail, pdfBytes, nombreArchivo);
+
+                // 4. Actualizar el "SentAt" en la tabla intermedia
+                supplierRelation.SentAt = DateTime.UtcNow;
+
+                // 5. Actualizar el estado de la Compra y de la Solicitud
+                if (requestQuote.Purchase.Status == PurchaseStatuses.Received)
+                {
+                    requestQuote.Purchase.Status = PurchaseStatuses.QuoteSent;
+                    requestQuote.Purchase.UpdatedAt = DateTime.UtcNow;
+                }
+
+                if (requestQuote.Status == "Pendiente")
+                {
+                    requestQuote.Status = "Enviada";
+                }
+
+                await _context.SaveChangesAsync();
+
+                return Ok(new ApiResponse<string>(true, $"Cotización enviada exitosamente a {supplierEmail}."));
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error al enviar la solicitud de cotización al proveedor {SupplierId}", supplierId);
+                return StatusCode(500, new ApiResponse<string>(false, "Ocurrió un error al intentar enviar el correo."));
+            }
+        }
+    
     }
 }

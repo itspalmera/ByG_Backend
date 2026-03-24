@@ -88,6 +88,8 @@ namespace ByG_Backend.src.Controller
                 .AsNoTracking()
                 .Include(p => p.PurchaseItems)
                 .Include(p => p.RequestQuote)
+                    .ThenInclude(rq => rq.RequestQuoteSuppliers)
+                        .ThenInclude(rqs => rqs.Supplier) // <--- ESTO ES CLAVE para traer el nombre
                 .Include(p => p.PurchaseOrder)
                 .FirstOrDefaultAsync(p => p.Id == id);
 
@@ -139,8 +141,8 @@ namespace ByG_Backend.src.Controller
                     var relations = dto.InitialSupplierIds.Select(sId => new RequestQuoteSupplier
                     {
                         RequestQuoteId = requestQuote.Id,
-                        SupplierId = sId,
-                        SentAt = DateTime.UtcNow
+                        SupplierId = sId
+                        // Tampoco ponemos SentAt aquí.
                     });
                     context.RequestQuoteSuppliers.AddRange(relations);
                     await context.SaveChangesAsync();
@@ -322,14 +324,34 @@ namespace ByG_Backend.src.Controller
             var newRelations = newIds.Select(sId => new RequestQuoteSupplier
             {
                 RequestQuoteId = requestQuote.Id,
-                SupplierId = sId,
-                SentAt = DateTime.UtcNow
+                SupplierId = sId
+                // Ya no ponemos SentAt aquí. Se quedará nulo o por defecto (0001) hasta que se envíe el correo.
             });
 
             context.RequestQuoteSuppliers.AddRange(newRelations);
             await context.SaveChangesAsync();
 
             return Ok(new ApiResponse<string>(true, "Proveedores agregados."));
+        }
+    
+        /// <summary>
+        /// Elimina un proveedor específico de una solicitud de cotización.
+        /// </summary>
+        [HttpDelete("{purchaseId}/remove-supplier/{supplierId}")]
+        public async Task<ActionResult<ApiResponse<string>>> RemoveSupplierFromQuote(int purchaseId, int supplierId)
+        {
+            var requestQuote = await context.RequestQuotes.FirstOrDefaultAsync(rq => rq.PurchaseId == purchaseId);
+            if (requestQuote == null) return NotFound(new ApiResponse<string>(false, "No existe solicitud para esta compra."));
+
+            var relation = await context.RequestQuoteSuppliers
+                .FirstOrDefaultAsync(rqs => rqs.RequestQuoteId == requestQuote.Id && rqs.SupplierId == supplierId);
+
+            if (relation == null) return NotFound(new ApiResponse<string>(false, "El proveedor no está en la lista."));
+
+            context.RequestQuoteSuppliers.Remove(relation);
+            await context.SaveChangesAsync();
+
+            return Ok(new ApiResponse<string>(true, "Proveedor removido correctamente."));
         }
     }
 }

@@ -28,6 +28,7 @@ namespace ByG_Backend.src.DTOs
         string UpdatedAt,
         string Requester,
         string? Observations,
+        string SupplierName,
         
         List<PurchaseItemDto> PurchaseItems,
 

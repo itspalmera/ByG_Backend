@@ -35,6 +35,11 @@ namespace ByG_Backend.src.Mappers
                 purchase.Requester,
                 purchase.Observations,
                 
+                // 👇 AQUÍ ESTÁ LA SOLUCIÓN: Agregamos el parámetro 9 que faltaba (SupplierName)
+                // Usamos un string seguro. Más adelante, si la compra tiene una Orden asociada,
+                // podrías extraer el nombre final desde ahí. Por ahora, esto evita que se rompa.
+                "Por definir", 
+                
                 purchase.PurchaseItems?.Select(item => new PurchaseItemDto(
                     item.Id, item.Name, item.BrandModel, item.Description, 
                     item.Unit, item.Size, item.Quantity
@@ -89,7 +94,7 @@ namespace ByG_Backend.src.Mappers
         /// Este método de extensión permite mutar el estado de la cabecera de la compra y actualiza 
         /// automáticamente la marca de tiempo 'UpdatedAt'.
         /// </remarks>
-        /// <param name="purchase">La entidad original cargada con seguimiento (tracking).</param>
+        /// <param name="purchase">La original cargada con seguimiento (tracking).</param>
         /// <param name="dto">El DTO que contiene los nuevos valores.</param>
         public static void UpdateModel(this Purchase purchase, PurchaseUpdateDto dto)
         {

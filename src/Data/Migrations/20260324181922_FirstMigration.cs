@@ -6,7 +6,7 @@ using Microsoft.EntityFrameworkCore.Migrations;
 namespace ByG_Backend.src.Data.Migrations
 {
     /// <inheritdoc />
-    public partial class InitialCreate : Migration
+    public partial class FirstMigration : Migration
     {
         /// <inheritdoc />
         protected override void Up(MigrationBuilder migrationBuilder)
@@ -54,6 +54,20 @@ namespace ByG_Backend.src.Data.Migrations
                 constraints: table =>
                 {
                     table.PrimaryKey("PK_AspNetUsers", x => x.Id);
+                });
+
+            migrationBuilder.CreateTable(
+                name: "bodegas",
+                columns: table => new
+                {
+                    Id = table.Column<int>(type: "INTEGER", nullable: false)
+                        .Annotation("Sqlite:Autoincrement", true),
+                    Nombre = table.Column<string>(type: "TEXT", nullable: false),
+                    Descripcion = table.Column<string>(type: "TEXT", nullable: true)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_bodegas", x => x.Id);
                 });
 
             migrationBuilder.CreateTable(
@@ -220,6 +234,59 @@ namespace ByG_Backend.src.Data.Migrations
                 });
 
             migrationBuilder.CreateTable(
+                name: "Solicitudes",
+                columns: table => new
+                {
+                    Id = table.Column<int>(type: "INTEGER", nullable: false)
+                        .Annotation("Sqlite:Autoincrement", true),
+                    Folio = table.Column<int>(type: "INTEGER", nullable: false),
+                    OrdenCompra = table.Column<string>(type: "TEXT", nullable: false),
+                    Proyecto = table.Column<string>(type: "TEXT", nullable: false),
+                    FechaCreacion = table.Column<DateTime>(type: "TEXT", nullable: false),
+                    FechaFinalizacion = table.Column<DateTime>(type: "TEXT", nullable: true),
+                    UsuarioSolicitanteId = table.Column<string>(type: "TEXT", nullable: true),
+                    Estado = table.Column<int>(type: "INTEGER", nullable: false),
+                    Observaciones = table.Column<string>(type: "TEXT", nullable: true)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_Solicitudes", x => x.Id);
+                    table.ForeignKey(
+                        name: "FK_Solicitudes_AspNetUsers_UsuarioSolicitanteId",
+                        column: x => x.UsuarioSolicitanteId,
+                        principalTable: "AspNetUsers",
+                        principalColumn: "Id");
+                });
+
+            migrationBuilder.CreateTable(
+                name: "productos",
+                columns: table => new
+                {
+                    id = table.Column<int>(type: "INTEGER", nullable: false)
+                        .Annotation("Sqlite:Autoincrement", true),
+                    bodega_id = table.Column<int>(type: "INTEGER", nullable: false),
+                    codigo_producto = table.Column<string>(type: "TEXT", maxLength: 50, nullable: false),
+                    nombre_producto = table.Column<string>(type: "TEXT", maxLength: 255, nullable: false),
+                    ubicacion = table.Column<string>(type: "TEXT", maxLength: 100, nullable: true),
+                    talla_medida = table.Column<string>(type: "TEXT", maxLength: 100, nullable: true),
+                    formato = table.Column<string>(type: "TEXT", maxLength: 100, nullable: true),
+                    cantidad = table.Column<int>(type: "INTEGER", nullable: false),
+                    observacion = table.Column<string>(type: "TEXT", nullable: true),
+                    activo = table.Column<bool>(type: "INTEGER", nullable: false),
+                    creado_en = table.Column<DateTime>(type: "TEXT", nullable: false)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_productos", x => x.id);
+                    table.ForeignKey(
+                        name: "FK_productos_bodegas_bodega_id",
+                        column: x => x.bodega_id,
+                        principalTable: "bodegas",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Cascade);
+                });
+
+            migrationBuilder.CreateTable(
                 name: "PurchaseItem",
                 columns: table => new
                 {
@@ -294,6 +361,38 @@ namespace ByG_Backend.src.Data.Migrations
                         column: x => x.SupplierId,
                         principalTable: "Supplier",
                         principalColumn: "Id");
+                });
+
+            migrationBuilder.CreateTable(
+                name: "DetalleSolicitudes",
+                columns: table => new
+                {
+                    Id = table.Column<int>(type: "INTEGER", nullable: false)
+                        .Annotation("Sqlite:Autoincrement", true),
+                    SolicitudId = table.Column<int>(type: "INTEGER", nullable: false),
+                    ProductoId = table.Column<int>(type: "INTEGER", nullable: true),
+                    TemporalNombre = table.Column<string>(type: "TEXT", nullable: true),
+                    TemporalCodigo = table.Column<string>(type: "TEXT", nullable: true),
+                    TemporalUnidad = table.Column<string>(type: "TEXT", nullable: true),
+                    TemporalTalla = table.Column<string>(type: "TEXT", nullable: true),
+                    Observacion = table.Column<string>(type: "TEXT", nullable: true),
+                    CantidadSolicitada = table.Column<int>(type: "INTEGER", nullable: false),
+                    CantidadAprobada = table.Column<int>(type: "INTEGER", nullable: false)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_DetalleSolicitudes", x => x.Id);
+                    table.ForeignKey(
+                        name: "FK_DetalleSolicitudes_Solicitudes_SolicitudId",
+                        column: x => x.SolicitudId,
+                        principalTable: "Solicitudes",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Cascade);
+                    table.ForeignKey(
+                        name: "FK_DetalleSolicitudes_productos_ProductoId",
+                        column: x => x.ProductoId,
+                        principalTable: "productos",
+                        principalColumn: "id");
                 });
 
             migrationBuilder.CreateTable(
@@ -442,6 +541,21 @@ namespace ByG_Backend.src.Data.Migrations
                 unique: true);
 
             migrationBuilder.CreateIndex(
+                name: "IX_DetalleSolicitudes_ProductoId",
+                table: "DetalleSolicitudes",
+                column: "ProductoId");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_DetalleSolicitudes_SolicitudId",
+                table: "DetalleSolicitudes",
+                column: "SolicitudId");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_productos_bodega_id",
+                table: "productos",
+                column: "bodega_id");
+
+            migrationBuilder.CreateIndex(
                 name: "IX_PurchaseItem_PurchaseId",
                 table: "PurchaseItem",
                 column: "PurchaseId");
@@ -493,6 +607,11 @@ namespace ByG_Backend.src.Data.Migrations
                 name: "IX_RequestQuoteSuppliers_SupplierId",
                 table: "RequestQuoteSuppliers",
                 column: "SupplierId");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_Solicitudes_UsuarioSolicitanteId",
+                table: "Solicitudes",
+                column: "UsuarioSolicitanteId");
         }
 
         /// <inheritdoc />
@@ -514,6 +633,9 @@ namespace ByG_Backend.src.Data.Migrations
                 name: "AspNetUserTokens");
 
             migrationBuilder.DropTable(
+                name: "DetalleSolicitudes");
+
+            migrationBuilder.DropTable(
                 name: "PasswordResetTokens");
 
             migrationBuilder.DropTable(
@@ -529,7 +651,10 @@ namespace ByG_Backend.src.Data.Migrations
                 name: "AspNetRoles");
 
             migrationBuilder.DropTable(
-                name: "AspNetUsers");
+                name: "Solicitudes");
+
+            migrationBuilder.DropTable(
+                name: "productos");
 
             migrationBuilder.DropTable(
                 name: "PurchaseItem");
@@ -539,6 +664,12 @@ namespace ByG_Backend.src.Data.Migrations
 
             migrationBuilder.DropTable(
                 name: "RequestQuotes");
+
+            migrationBuilder.DropTable(
+                name: "AspNetUsers");
+
+            migrationBuilder.DropTable(
+                name: "bodegas");
 
             migrationBuilder.DropTable(
                 name: "Supplier");
