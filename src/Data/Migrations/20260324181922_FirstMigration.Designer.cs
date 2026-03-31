@@ -11,14 +11,174 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 namespace ByG_Backend.src.Data.Migrations
 {
     [DbContext(typeof(DataContext))]
-    [Migration("20260226163243_InitialCreate")]
-    partial class InitialCreate
+    [Migration("20260324181922_FirstMigration")]
+    partial class FirstMigration
     {
         /// <inheritdoc />
         protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
-            modelBuilder.HasAnnotation("ProductVersion", "9.0.0");
+            modelBuilder.HasAnnotation("ProductVersion", "9.0.2");
+
+            modelBuilder.Entity("ByG_Backend.src.Models.MaterialRequest.Bodega", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Descripcion")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Nombre")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("bodegas");
+                });
+
+            modelBuilder.Entity("ByG_Backend.src.Models.MaterialRequest.DetalleSolicitud", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int>("CantidadAprobada")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int>("CantidadSolicitada")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Observacion")
+                        .HasColumnType("TEXT");
+
+                    b.Property<int?>("ProductoId")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int>("SolicitudId")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("TemporalCodigo")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("TemporalNombre")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("TemporalTalla")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("TemporalUnidad")
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ProductoId");
+
+                    b.HasIndex("SolicitudId");
+
+                    b.ToTable("DetalleSolicitudes");
+                });
+
+            modelBuilder.Entity("ByG_Backend.src.Models.MaterialRequest.Producto", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("id");
+
+                    b.Property<bool>("Activo")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("activo");
+
+                    b.Property<int>("BodegaId")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("bodega_id");
+
+                    b.Property<int>("Cantidad")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("cantidad");
+
+                    b.Property<string>("CodigoProducto")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("codigo_producto");
+
+                    b.Property<DateTime>("CreadoEn")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("creado_en");
+
+                    b.Property<string>("Formato")
+                        .HasMaxLength(100)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("formato");
+
+                    b.Property<string>("NombreProducto")
+                        .IsRequired()
+                        .HasMaxLength(255)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("nombre_producto");
+
+                    b.Property<string>("Observacion")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("observacion");
+
+                    b.Property<string>("TallaMedida")
+                        .HasMaxLength(100)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("talla_medida");
+
+                    b.Property<string>("Ubicacion")
+                        .HasMaxLength(100)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("ubicacion");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("BodegaId");
+
+                    b.ToTable("productos");
+                });
+
+            modelBuilder.Entity("ByG_Backend.src.Models.MaterialRequest.Solicitud", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int>("Estado")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<DateTime>("FechaCreacion")
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime?>("FechaFinalizacion")
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("Folio")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Observaciones")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("OrdenCompra")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Proyecto")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("UsuarioSolicitanteId")
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("UsuarioSolicitanteId");
+
+                    b.ToTable("Solicitudes");
+                });
 
             modelBuilder.Entity("ByG_Backend.src.Models.PasswordResetToken", b =>
                 {
@@ -606,6 +766,43 @@ namespace ByG_Backend.src.Data.Migrations
                     b.ToTable("AspNetUserTokens", (string)null);
                 });
 
+            modelBuilder.Entity("ByG_Backend.src.Models.MaterialRequest.DetalleSolicitud", b =>
+                {
+                    b.HasOne("ByG_Backend.src.Models.MaterialRequest.Producto", "Producto")
+                        .WithMany()
+                        .HasForeignKey("ProductoId");
+
+                    b.HasOne("ByG_Backend.src.Models.MaterialRequest.Solicitud", "Solicitud")
+                        .WithMany("Detalles")
+                        .HasForeignKey("SolicitudId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Producto");
+
+                    b.Navigation("Solicitud");
+                });
+
+            modelBuilder.Entity("ByG_Backend.src.Models.MaterialRequest.Producto", b =>
+                {
+                    b.HasOne("ByG_Backend.src.Models.MaterialRequest.Bodega", "Bodega")
+                        .WithMany("Productos")
+                        .HasForeignKey("BodegaId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Bodega");
+                });
+
+            modelBuilder.Entity("ByG_Backend.src.Models.MaterialRequest.Solicitud", b =>
+                {
+                    b.HasOne("ByG_Backend.src.Models.User", "UsuarioSolicitante")
+                        .WithMany()
+                        .HasForeignKey("UsuarioSolicitanteId");
+
+                    b.Navigation("UsuarioSolicitante");
+                });
+
             modelBuilder.Entity("ByG_Backend.src.Models.PurchaseItem", b =>
                 {
                     b.HasOne("ByG_Backend.src.Models.Purchase", "Purchase")
@@ -747,6 +944,16 @@ namespace ByG_Backend.src.Data.Migrations
                         .HasForeignKey("UserId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
+                });
+
+            modelBuilder.Entity("ByG_Backend.src.Models.MaterialRequest.Bodega", b =>
+                {
+                    b.Navigation("Productos");
+                });
+
+            modelBuilder.Entity("ByG_Backend.src.Models.MaterialRequest.Solicitud", b =>
+                {
+                    b.Navigation("Detalles");
                 });
 
             modelBuilder.Entity("ByG_Backend.src.Models.Purchase", b =>

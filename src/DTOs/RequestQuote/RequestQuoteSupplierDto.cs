@@ -25,5 +25,9 @@ namespace ByG_Backend.src.DTOs
         /// Referencia al identificador del Proveedor invitado.
         /// </summary>
         public int SupplierId { get; set; }
+
+        public string SupplierName { get; set; } = string.Empty;
+        public string SupplierRut { get; set; } = string.Empty;
+        public string SupplierEmail { get; set; } = string.Empty;
     }
 }
