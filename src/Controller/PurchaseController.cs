@@ -182,6 +182,7 @@ namespace ByG_Backend.src.Controller
             try
             {
                 var solicitud = await context.Solicitudes
+                    .Include(s => s.UsuarioSolicitante)
                     .Include(s => s.Detalles)
                         .ThenInclude(d => d.Producto) 
                     .FirstOrDefaultAsync(s => s.Id == solicitudId);
@@ -200,7 +201,11 @@ namespace ByG_Backend.src.Controller
                     Status = "Esperando proveedores", 
                     RequestDate = solicitud.FechaCreacion,
                     UpdatedAt = DateTime.UtcNow,
-                    Requester = solicitud.UsuarioSolicitanteId ?? "Sistema Automático", 
+
+
+                    Requester = solicitud.UsuarioSolicitanteId != null
+                    ? $"{solicitud.UsuarioSolicitante.FirstName} {solicitud.UsuarioSolicitante.LastName}"
+                    : (solicitud.UsuarioSolicitanteId ?? "Sistema Automático"),
                     Observations = solicitud.Observaciones,
                     
                     PurchaseItems = solicitud.Detalles.Select(d => new PurchaseItem
