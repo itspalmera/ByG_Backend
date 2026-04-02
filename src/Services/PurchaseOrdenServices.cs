@@ -83,61 +83,116 @@ namespace ByG_Backend.src.Services
                         });
                     });
 
+
+
+
                     // =========================
-                    // DATOS EMPRESA
+                    // BLOQUE SUPERIOR (IZQ: Empresa + Proveedor | DER: Orden)
                     // =========================
-                    root.Item().PaddingTop(12)
-                    .Border(1)
-                    .BorderColor(Colors.Black)
-                    .Padding(10)
-                    .Row(row =>
+                    root.Item().PaddingTop(12).Row(mainRow =>
                     {
-                        row.ConstantItem(85).Column(left =>
+                        // ================= IZQUIERDA =================
+                        mainRow.RelativeItem(3).Column(left =>
                         {
-                            left.Item().Text("Empresa").Bold();
-                            left.Item().Text("Dirección").Bold();
-                            left.Item().Text("Correo").Bold();
-                            left.Item().Text("Rut").Bold();
-                            left.Item().Text("Fono").Bold();
+                            // EMPRESA
+                            left.Item()
+                            .Border(1).BorderColor(Colors.Black)
+                            .Padding(10)
+                            .Row(row =>
+                            {
+                                row.ConstantItem(45).Column(col =>
+                                {
+                                    col.Item().Text("Empresa").Bold();
+                                    col.Item().Text("Dirección").Bold();
+                                    col.Item().Text("Correo").Bold();
+                                    col.Item().Text("Rut").Bold();
+                                    col.Item().Text("Fono").Bold();
+                                });
+
+                                row.RelativeItem().Column(col =>
+                                {
+                                    col.Item().Text(_company.BusinessName ?? "—");
+                                    col.Item().Text(_company.Address ?? "—");
+                                    col.Item().Text(_company.Email ?? "—");
+                                    col.Item().Text(_company.Rut ?? "—");
+                                    col.Item().Text(_company.Phone ?? "—");
+                                });
+                            });
+
+                            // PROVEEDOR
+                            var supplier = _order.Quote?.Supplier;
+
+                            left.Item().PaddingTop(10)
+                            .Border(1).BorderColor(Colors.Black)
+                            .Padding(10)
+                            .Row(row =>
+                            {
+                                row.ConstantItem(45).Column(col =>
+                                {
+                                    col.Item().Text("Proveedor").Bold();
+                                    col.Item().Text("Dirección").Bold();
+                                    col.Item().Text("Rut").Bold();
+                                    col.Item().Text("Fono").Bold();
+                                });
+
+                                row.RelativeItem().Column(col =>
+                                {
+                                    col.Item().Text(supplier?.BusinessName ?? "—");
+                                    col.Item().Text(supplier?.Address ?? "—");
+                                    col.Item().Text(supplier?.Rut ?? "—");
+                                    col.Item().Text(supplier?.Phone ?? "—");
+                                });
+                            });
                         });
 
-                        row.RelativeItem().Column(right =>
+                        // ================= DERECHA =================
+                        mainRow.RelativeItem(2).PaddingLeft(3)
+                        .Border(1).BorderColor(Colors.Black)
+                        .Padding(6)
+                        .Column(col =>
                         {
-                            right.Item().Text(_company.BusinessName ?? "—");
-                            right.Item().Text(_company.Address ?? "—");
-                            right.Item().Text(_company.Email ?? "—");
-                            right.Item().Text(_company.Rut ?? "—");
-                            right.Item().Text(_company.Phone ?? "—");
+                            col.Item().Row(row =>
+                            {
+                                row.RelativeItem().Column(c =>
+                                {
+                                    c.Item().Text("Centro de costo").Bold();
+                                    c.Item().Text("Estado").Bold();
+                                    c.Item().Text("Medio de pago").Bold();
+                                    c.Item().Text("Condición de pago").Bold();
+                                    c.Item().Text("Moneda").Bold();
+                                });
+
+                                row.RelativeItem().Column(c =>
+                                {
+                                    c.Item().Text(_order.CostCenter ?? "—");
+                                    c.Item().Text(_order.Status ?? "—");
+                                    c.Item().Text(_order.PaymentForm ?? "—");
+                                    c.Item().Text(_order.PaymentTerms ?? "—");
+                                    c.Item().Text(_order.Currency ?? "—");
+                                });
+                            });
+
+                            col.Item().PaddingTop(10).Row(row =>
+                            {
+                                row.RelativeItem().Column(c =>
+                                {
+                                    c.Item().Text("Plazo entrega").Bold();
+                                    c.Item().Text("Plazo máx. entrega").Bold();
+                                    c.Item().Text("Dirección envío").Bold();
+                                    c.Item().Text("Método envío").Bold();
+                                });
+
+                                row.RelativeItem().Column(c =>
+                                {
+                                    c.Item().Text(_order.ExpectedDeliveryDate?.ToString("dd-MM-yyyy") ?? "—");
+                                    c.Item().Text(_order.DeliveryDeadline?.ToString("dd-MM-yyyy") ?? "—");
+                                    c.Item().Text(_order.ShippingAddress ?? "—");
+                                    c.Item().Text(_order.ShippingMethod ?? "—");
+                                });
+                            });
                         });
                     });
 
-                    // =========================
-                    // DATOS PROVEEDOR
-                    // =========================
-                    var supplier = _order.Quote?.Supplier;
-
-                    root.Item().PaddingTop(10)
-                    .Border(1)
-                    .BorderColor(Colors.Black)
-                    .Padding(10)
-                    .Row(row =>
-                    {
-                        row.ConstantItem(85).Column(left =>
-                        {
-                            left.Item().Text("Proveedor").Bold();
-                            left.Item().Text("Dirección").Bold();
-                            left.Item().Text("Rut").Bold();
-                            left.Item().Text("Fono").Bold();
-                        });
-
-                        row.RelativeItem().Column(right =>
-                        {
-                            right.Item().Text(supplier?.BusinessName ?? "—");
-                            right.Item().Text(supplier?.Address ?? "—");
-                            right.Item().Text(supplier?.Rut ?? "—");
-                            right.Item().Text(supplier?.Phone ?? "—");
-                        });
-                    });
 
                     // =========================
                     // TABLA PRODUCTOS
@@ -146,20 +201,24 @@ namespace ByG_Backend.src.Services
                     {
                         table.ColumnsDefinition(columns =>
                         {
-                            columns.ConstantColumn(40); 
-                            columns.RelativeColumn();  
-                            columns.RelativeColumn();  
-                            columns.ConstantColumn(80); 
-                            columns.ConstantColumn(80); 
+                            columns.ConstantColumn(40); // ITEM
+                            columns.RelativeColumn();   // MATERIAL
+                            columns.RelativeColumn();   // DESCRIPCIÓN
+                            columns.ConstantColumn(40); // UNIDAD
+                            columns.ConstantColumn(40); // CANTIDAD
+                            columns.ConstantColumn(50); // UNITARIO
+                            columns.ConstantColumn(80); // TOTAL
                         });
 
                         table.Header(h =>
                         {
-                            h.Cell().Element(CellHeader).Text("ITEM");
-                            h.Cell().Element(CellHeader).Text("MATERIAL");
-                            h.Cell().Element(CellHeader).Text("DESCRIPCIÓN");
-                            h.Cell().Element(CellHeader).Text("PRECIO");
-                            h.Cell().Element(CellHeader).Text("TOTAL");
+                            h.Cell().Element(CellHeader).Text("Ítem");
+                            h.Cell().Element(CellHeader).Text("Material");
+                            h.Cell().Element(CellHeader).Text("Descripción");
+                            h.Cell().Element(CellHeader).Text("Unid.");
+                            h.Cell().Element(CellHeader).Text("Cant.");
+                            h.Cell().Element(CellHeader).Text("Precio");
+                            h.Cell().Element(CellHeader).Text("Total");
                         });
 
                         var items = _order.Quote?.QuoteItems ?? new List<QuoteItem>();
@@ -174,6 +233,8 @@ namespace ByG_Backend.src.Services
                             table.Cell().Element(CellBody).AlignCenter().Text(idx.ToString());
                             table.Cell().Element(CellBody).Text(item.Name ?? "");
                             table.Cell().Element(CellBody).Text(item.Description ?? "");
+                            table.Cell().Element(CellBody).AlignCenter().Text(item.Unit ?? "");
+                            table.Cell().Element(CellBody).AlignRight().Text(item.Quantity.ToString());
                             table.Cell().Element(CellBody).AlignRight().Text(price.ToString("N0"));
                             table.Cell().Element(CellBody).AlignRight().Text(total.ToString("N0"));
 
@@ -191,32 +252,83 @@ namespace ByG_Backend.src.Services
                     });
 
                     // =========================
-                    // TOTALES
+                    // TOTALES Y OBSERVACIONES
                     // =========================
                     root.Item().PaddingTop(12)
-                    .AlignRight()
-                    .Column(col =>
+                    .Table(table =>
                     {
-                        col.Item().Text($"SubTotal: {_order.SubTotal:N0}");
-                        col.Item().Text($"Descuento: {_order.Discount:N0}");
-                        col.Item().Text($"Flete: {_order.FreightCharge:N0}");
-                        col.Item().Text($"IVA ({_order.TaxRate}%): {_order.TaxAmount:N0}");
+                        table.ColumnsDefinition(columns =>
+                        {
+                            columns.RelativeColumn(2); // Observaciones
+                            columns.RelativeColumn(1); // Totales
+                        });
 
-                        col.Item().Text($"TOTAL: {_order.TotalAmount:N0}")
-                        .Bold()
-                        .FontSize(12);
+                        table.Cell().Border(1).Padding(8).Column(obs =>
+                        {
+                            obs.Item().Text("Observaciones").Bold();
+                            obs.Item().Height(80).Text(_order.Observations ?? "");
+                        });
+
+                        table.Cell().Border(1).Padding(4).Column(tot =>
+                        {
+                            tot.Item().Text($"Valor compra: {_order.SubTotal:N0}");
+                            tot.Item().Text($"Descuento: {_order.Discount:N0}");
+                            tot.Item().Text($"Recargo flete: {_order.FreightCharge:N0}");
+                            tot.Item().Text($"SubTotal: {_order.SubTotal:N0}");
+                            tot.Item().Text($"Total Exento: {_order.TaxExemptTotal:N0}");
+                            tot.Item().Text($"IVA ({_order.TaxRate}%): {_order.TaxAmount:N0}");
+                            tot.Item().Text($"SubTotal c/IVA: {_order.TotalAmount:N0}");
+                            tot.Item().Text($"Retención: 0"); // si no tienes campo aún
+
+                            tot.Item().PaddingTop(5)
+                            .Text($"TOTAL: {_order.TotalAmount:N0}")
+                            .Bold()
+                            .FontSize(10);
+                        });
                     });
 
                     // =========================
                     // FIRMA
                     // =========================
-                    root.Item().PaddingTop(22)
-                    .AlignCenter()
-                    .Column(firma =>
+                    root.Item().PaddingTop(10)
+                    .Table(table =>
                     {
-                        firma.Item().Width(260).BorderBottom(1).BorderColor(Colors.Black).PaddingBottom(3);
-                        firma.Item().Text(_order.ApproverName ?? "").Bold();
-                        firma.Item().Text(_order.ApproverRole ?? "").FontSize(8);
+                        table.ColumnsDefinition(columns =>
+                        {
+                            columns.RelativeColumn(2);
+                            columns.RelativeColumn(1);
+                            columns.RelativeColumn(1);
+                        });
+
+                        // DATOS ACEPTANTE
+                        table.Cell().Border(1).Padding(5).Column(col =>
+                        {
+                            col.Item().Text("Nombre Aceptante").Bold();
+                            col.Item().Text(_order.ApproverName ?? "");
+
+                            col.Item().PaddingTop(5).Text("RUT").Bold();
+                            col.Item().Text(_order.ApproverRut ?? "");
+
+                            col.Item().PaddingTop(5).Text("Cargo").Bold();
+                            col.Item().Text(_order.ApproverRole ?? "");
+
+                            col.Item().PaddingTop(5).Text("Fecha").Bold();
+                            col.Item().Text(_order.SignedAt?.ToString("dd-MM-yyyy") ?? "");
+                        });
+
+                        // FIRMA ACEPTANTE
+                        table.Cell().Border(1).Padding(8).Column(col =>
+                        {
+                            col.Item().Text("FIRMA ACEPTANTE").Bold();
+                            col.Item().Height(80);
+                        });
+
+                        // FIRMA EMPRESA
+                        table.Cell().Border(1).Padding(8).Column(col =>
+                        {
+                            col.Item().Text("FIRMA").Bold();
+                            col.Item().Height(80);
+                        });
                     });
                 });
             });
